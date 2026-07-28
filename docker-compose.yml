@@ -1,0 +1,85 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: dpp-redis
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - dpp_redis_data:/data
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: dpp-postgres
+    environment:
+      POSTGRES_USER: dpp
+      POSTGRES_PASSWORD: dpp
+      POSTGRES_DB: dpp
+    ports:
+      - '5433:5432'
+    volumes:
+      - dpp_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U dpp']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./api
+    container_name: dpp-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://dpp:dpp@postgres:5432/dpp
+      # Override in production / local .env — must be ≥32 chars.
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-to-a-32plus-char-secret}
+      PORT: 3000
+      UPLOAD_DIR: /app/uploads
+      PUBLIC_BASE_URL: http://localhost:3000
+      WEB_PUBLIC_URL: http://localhost:3001
+      CORS_ORIGIN: http://localhost:3001
+      COOKIE_SECURE: 'false'
+      SCAN_COUNTRY_FALLBACK: XX
+      REDIS_URL: redis://redis:6379
+      REDIS_KEY_PREFIX: 'dpp:'
+      # Set true only for first boot against a fresh volume.
+      RUN_SEED: ${RUN_SEED:-true}
+    ports:
+      - '3000:3000'
+    volumes:
+      - dpp_uploads:/app/uploads
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  web:
+    build:
+      context: ./web
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:3000
+    container_name: dpp-web
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      # Server Components fetch the API over the compose network (not localhost).
+      INTERNAL_API_URL: http://api:3000
+    ports:
+      - '3001:3000'
+
+volumes:
+  dpp_postgres_data:
+  dpp_uploads:
+  dpp_redis_data:

@@ -1,0 +1,28 @@
+# dependencies
+node_modules/
+
+# build output
+api/dist/
+web/.next/
+*.tsbuildinfo
+
+# env
+.env
+.env.*
+!.env.example
+
+# runtime data
+api/uploads/
+api/coverage/
+web/test-results/
+web/playwright-report/
+
+# editor/OS
+.DS_Store
+
+# local scratch / non-submission artifacts
+tmp/
+.claude/
+*.pdf
+CODEX_REVIEW_BRIEF.md
+scripts/
