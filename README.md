@@ -1,157 +1,201 @@
 # Digital Product Passport (DPP) Platform
 
-A full-stack Digital Product Passport platform. Brands manage product identity, materials,
-sustainability data, certifications, documents and images, then publish an immutable,
-UUID-addressed passport linked by a QR code. Public passport visits are recorded and feed the
-dashboard and analytics.
+Full-stack Digital Product Passport platform for the technical assessment.
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for the system design, design decisions, security
-approach, scalability considerations and future improvements, and
-[docs/DATA-MODEL.md](./docs/DATA-MODEL.md) for the database schema and its integrity invariants.
+Brands create and manage product drafts (materials, sustainability, certifications, documents,
+images), publish an immutable passport with a stable UUID/QR, and review scan analytics. End users
+open the public passport without logging in.
+
+This README is the single entry point for **install, run, demo accounts, URLs, API docs, and
+verification**. Longer design notes live in [ARCHITECTURE.md](./ARCHITECTURE.md) and
+[docs/DATA-MODEL.md](./docs/DATA-MODEL.md).
+
+---
+
+## Quick start (recommended)
+
+**Prerequisite:** Docker Desktop (or Docker Engine + Compose v2).
+
+```bash
+git clone https://github.com/muhammadnoumandev4/dpp-platform.git
+cd dpp-platform
+JWT_SECRET=$(openssl rand -base64 48) docker compose up --build
+```
+
+Wait until `api` and `web` are healthy, then open:
+
+| What | URL |
+|---|---|
+| Back office + public passports | http://localhost:3001 |
+| API | http://localhost:3000 |
+| Swagger / OpenAPI | http://localhost:3000/api/docs |
+| Login | http://localhost:3001/login |
+| Brand signup | http://localhost:3001/signup |
+
+On first boot Compose starts Postgres + Redis + API + Web, applies Prisma migrations, and runs the
+idempotent seed (`RUN_SEED=true` by default). After a successful first seed on a persistent volume,
+you can set `RUN_SEED=false` for later restarts.
+
+Stop with `Ctrl+C`, or `docker compose down`. Data volumes persist; wipe with
+`docker compose down -v`.
+
+---
+
+## Demo accounts
+
+Password for both: **`password123`**
+
+| Email | Role | Opens |
+|---|---|---|
+| `editor@notarify.test` | Brand **OWNER** (Notarify) | http://localhost:3001/ |
+| `admin@notarify.test` | Platform **ADMIN** | http://localhost:3001/admin |
+
+Both use the same login form; the app routes by role after sign-in. Despite the email prefix,
+`editor@notarify.test` is the brand **owner**, not an `EDITOR`-role user.
+
+---
+
+## 5-minute smoke path (reviewer checklist)
+
+1. Login as `editor@notarify.test` / `password123`.
+2. Open **Products** → open the seeded product (or create a new draft).
+3. **Images** tab → upload a **cover** image (seeded product cannot publish without one).
+4. Click **Publish** → confirm QR + public URL are generated.
+5. Open the passport (`Open Passport` or `/passport/{uuid}`) — preferably with `?src=qr`.
+6. Check **Dashboard** and **Analytics** for views/scans.
+7. Open Swagger at http://localhost:3000/api/docs and try `GET /dashboard` after authenticating
+   via login cookie / Bearer as documented in the UI.
+
+Optional: platform console with `admin@notarify.test` at `/admin`.
+
+---
+
+## Deliverables map
+
+| Assessment ask | Location in this repo |
+|---|---|
+| Complete source (backend + frontend) | `api/`, `web/` |
+| Docker Compose | `docker-compose.yml` (+ `api/Dockerfile`, `web/Dockerfile`) |
+| Migrations + seed | `api/prisma/migrations/`, `api/prisma/seed.ts` |
+| Swagger / OpenAPI | http://localhost:3000/api/docs (NestJS Swagger from DTOs) |
+| README (install + run) | this file |
+| Architecture (2–3 pages) | [ARCHITECTURE.md](./ARCHITECTURE.md) |
+| Database design detail | [docs/DATA-MODEL.md](./docs/DATA-MODEL.md) + `api/prisma/schema.prisma` |
+
+---
 
 ## Stack
 
 | Layer | Technology |
 |---|---|
-| API | Node.js 20, NestJS 11, PostgreSQL, Prisma ORM, JWT (httpOnly cookie), Swagger/OpenAPI |
+| API | Node.js 20, NestJS 11, PostgreSQL, Prisma, JWT (httpOnly cookie), Swagger/OpenAPI |
 | Web | Next.js 14 (App Router), React 18, TypeScript, Material UI |
-| Infra | Docker Compose (Postgres + Redis + API + Web), Redis cache with in-memory fallback, non-root containers |
+| Infra | Docker Compose (Postgres, Redis, API, Web), Redis cache with in-memory fallback, non-root containers |
 
-JWT secret and seed behaviour are overridable via Compose env:
+---
 
-```bash
-JWT_SECRET=$(openssl rand -base64 48) RUN_SEED=true docker compose up --build
-```
+## Local development (apps outside Compose)
 
-After the first successful seed against a persistent volume, set `RUN_SEED=false`.
+Use this only if you want hot-reload without rebuilding images. Postgres can still run via Compose.
 
-## Installation and execution
-
-### Prerequisites
-
-- Docker and Docker Compose (for the one-command stack), or
-- Node.js 20+, npm and a local Docker for Postgres (for local development)
-
-### Quick start (Docker Compose)
+**API** (Postgres on host port **5433** when using Compose):
 
 ```bash
-docker compose up --build
-```
-
-| Service | URL |
-|---|---|
-| Back office + public passports | http://localhost:3001 |
-| API | http://localhost:3000 |
-| Swagger / OpenAPI docs | http://localhost:3000/api/docs |
-
-The API entrypoint applies pending Prisma migrations on start and, while `RUN_SEED=true`
-(the Compose default), runs the idempotent seed **on every container start**. Turn the flag off
-after initial setup in any persistent, non-demo environment.
-
-### Seed accounts (password: `password123`)
-
-| Email | Role | Lands on |
-|---|---|---|
-| `editor@notarify.test` | `OWNER` of the seeded Notarify brand | `/` (back office) |
-| `admin@notarify.test` | `ADMIN` (internal platform employee) | `/admin` (platform console) |
-
-Both sign in through the same form at http://localhost:3001/login; the web app routes by role
-after login. Note that despite its email address, `editor@notarify.test` is the brand **owner**
-account, not an `EDITOR`-role user.
-
-The seeded product has materials and sustainability data but no cover image, so publishing it
-as-is is blocked by the publish validation — upload a cover image first.
-
-New brands can self-register at http://localhost:3001/signup. Registration atomically creates the
-organisation and its brand-owner (`OWNER`) account, signs the owner in, and records the event in
-the audit log. Every brand manages only its own products, passports, users and analytics.
-
-### Local development (without Compose for the apps)
-
-```bash
-docker compose up -d postgres
+docker compose up -d postgres redis
 
 cd api
 cp .env.example .env
+# Set DATABASE_URL to postgresql://dpp:dpp@localhost:5433/dpp
+# Set JWT_SECRET to a string ≥ 32 characters
 npm install
 npx prisma migrate deploy
 npm run db:seed
 npm run start:dev
 ```
 
+**Web** (separate terminal):
+
 ```bash
-# Separate terminal
 cd web
-cp .env.example .env
+cp .env.example .env   # NEXT_PUBLIC_API_URL=http://localhost:3000
 npm install
-npm run dev
+npm run dev            # http://localhost:3001
 ```
 
-Compose maps Postgres to host port `5433`; keep the local API `DATABASE_URL` aligned with it.
-Redis is optional in local development — the cache falls back to an in-memory store when
-`REDIS_URL` is unset.
+Redis is optional locally — if `REDIS_URL` is unset the API uses an in-memory cache fallback.
+
+---
+
+## Required API surface
+
+Implemented and documented in Swagger:
+
+| Method | Path |
+|---|---|
+| `POST` | `/auth/login` |
+| `GET` | `/products` |
+| `POST` | `/products` |
+| `PATCH` | `/products/{id}` |
+| `DELETE` | `/products/{id}` |
+| `POST` | `/products/{id}/publish` |
+| `GET` | `/passport/{uuid}` |
+| `GET` | `/analytics` |
+| `GET` | `/dashboard` |
+
+Additional routes (versions, unpublish, scans beacon, uploads, users, etc.) are listed in Swagger.
+
+---
 
 ## Roles and permissions
 
-All identities live in the single `users` table, distinguished by the `Role` enum. `ADMIN` is the
-only role with no `organisationId`; the other three are tenant roles scoped to one organisation.
-Route access is checked per-endpoint against the permission set for the role
-(`api/src/auth/permissions.ts`), not against the role name.
+All identities live in `users`. `ADMIN` has `organisationId = null`; brand roles are tenant-scoped.
+Endpoints declare permissions (`api/src/auth/permissions.ts`); access is not a raw role string check.
 
-| Role | Permissions | Access |
-|---|---|---|
-| `ADMIN` | `platform.read`, `platform.manage`, `brands.manage` | Internal platform employee. Cross-tenant console: platform totals, every brand, passports, scans, audit history, brand suspension/reactivation. Holds no tenant permissions (`users.manage` is tenant-only), so tenant product and brand routes reject it. |
-| `OWNER` | `brand.*`, `products.*`, `users.manage` | Created automatically by brand signup. Full brand profile, team, audit log, product and passport control, including archiving (soft delete). |
-| `MANAGER` | `brand.read`, `products.read/create/update/publish` | Invited by the owner. Manages products and may publish and unpublish them. Cannot archive products (no `products.delete`), manage the brand profile, or manage the team. |
-| `EDITOR` | `brand.read`, `products.read/create/update` | Invited by the owner. Creates and edits product content, uploads and previews, but cannot publish, unpublish, archive, manage users or change brand settings. |
+| Role | Access |
+|---|---|
+| `ADMIN` | Platform console only (cross-tenant). No brand product routes. |
+| `OWNER` | Full brand: products, publish, users, settings, soft-delete. |
+| `MANAGER` | Products + publish/unpublish; no team/archive/settings. |
+| `EDITOR` | Create/edit drafts and uploads; cannot publish. |
 
-Owners can invite only Managers or Editors — the invitation DTO restricts the role and a database
-CHECK constraint backstops it, so neither ownership nor platform admin can be granted through an
-invitation. Ownership cannot be removed through the Users screen.
+Owners invite only Manager or Editor (DTO + DB CHECK). New brands self-register at `/signup`
+(creates organisation + OWNER atomically).
 
-## Modules
+---
+
+## Publication model (important)
+
+- **`Product`** = mutable draft.
+- **`PassportVersion`** = immutable JSON snapshot served to the public.
+- First publish creates version `1` and a **stable** UUID/QR (never changes on republish).
+- Draft edits after publish do **not** change the public page until republish.
+- Soft-delete archives the product in the back office but keeps the last passport; **Unpublish**
+  withdraws public access.
+
+Preview in the product editor defaults to the **published snapshot** (what consumers see), with an
+option to inspect the current draft.
+
+---
+
+## Project layout
 
 ```text
 api/src/
-├── auth/           brand registration, cookie/Bearer JWT authentication and permission guards
-├── platform-admin/ cross-tenant employee console and global brand operations
-├── organisations/  brand profile and tenant-scoped updates
-├── invitations/    tenant invitations and race-safe acceptance
-├── users/          tenant member list and account deactivation
-├── taxonomy/       curated category, country and material catalogs
-├── products/       drafts, nested resources and publish validation
-├── passports/      publish status, immutable versions and public reads
-├── uploads/        storage abstraction, magic-byte validation and orphan cleanup
-├── qr/             stable public QR generation
-├── scans/          privacy-aware scan recording and deduplication
-├── analytics/      dashboard totals, trends and daily series
-├── audit/          tenant-scoped mutation history
-├── cache/          Redis cache with in-memory fallback
-└── common/         validation, errors, request IDs and logging
-
+├── auth/  platform-admin/  organisations/  invitations/  users/
+├── taxonomy/  products/  passports/  uploads/  qr/
+├── scans/  analytics/  audit/  cache/  health/  common/
 web/
-├── app/login + app/signup   shared authentication and brand onboarding
-├── app/admin/               internal platform operations console (role-routed after login)
-├── app/(dashboard)/         dashboard, products, passports, analytics, users, settings
-├── app/invite/[token]/      invitation acceptance
-├── app/passport/[uuid]/     public passport page
-└── components/passport/     shared PassportView used by the editor preview and the public page
+├── app/(dashboard)/   brand back office
+├── app/admin/         platform console
+├── app/passport/      public SSR passport
+└── components/passport/  shared PassportView (preview + public)
 ```
 
-## Publication contract
-
-`Product` is the mutable draft. `PassportVersion` is an immutable JSON snapshot. First publication
-creates version 1 and a stable UUID/QR. Later edits set `hasUnpublishedChanges`, but the public
-page continues serving the last snapshot until republish. Republishing increments the version
-without changing the UUID. Soft-deleting archives the mutable product from the back office but
-preserves its last issued immutable passport; public access is withdrawn only through the explicit
-Unpublish action.
-
-The publish transaction locks the product and passport rows, revalidates the locked product graph,
-stores the snapshot, advances the version and updates product state atomically. Authenticated
-tenant users can inspect the append-only history through `GET /products/:id/passport-versions`.
+---
 
 ## Verification
+
+With Node 20+ installed (Compose stack can be stopped or left running for e2e):
 
 ```bash
 npm --prefix api test -- --runInBand
@@ -161,18 +205,19 @@ npx --prefix web tsc --noEmit
 npm --prefix web run build
 ```
 
-The API unit suite lives under `api/src/**/*.spec.ts` (Jest `rootDir` is `src`) and covers auth,
-tenant isolation, publish/snapshot behaviour, scan privacy, caching, and uploads. Scan recording
-reads the client IP from Express's trusted-proxy-aware `request.ip` (configured via `TRUST_PROXY`),
-so client-supplied forwarding headers cannot spoof the scan IP hash or country.
+Optional Playwright (needs running web+api): `npm --prefix web run test:e2e`.
 
-Optional Playwright smoke tests for the web app: `npm --prefix web run test:e2e` (requires a
-running stack).
+---
 
-## Bonus features
+## Bonus features included
 
-All bonus items named in the assessment are implemented: PostgreSQL full-text product search,
-passport versioning, soft delete, owner-visible audit log, Redis caching, pagination and advanced
-filters, server-generated passport PDF export, native drag-and-drop uploads with client and server
-validation, and automated unit tests. Redis supports URL or split/TLS configuration and uses a
-`dpp:` key namespace by default so a managed instance can be shared safely.
+Full-text product search, passport versioning, soft delete, audit log, Redis caching, pagination /
+filters, passport PDF export, drag-and-drop uploads with server magic-byte checks, unit tests, CI
+(`.github/workflows/ci.yml`).
+
+---
+
+## Architecture docs
+
+- [ARCHITECTURE.md](./ARCHITECTURE.md) — system design, decisions, security, scalability, future work
+- [docs/DATA-MODEL.md](./docs/DATA-MODEL.md) — schema, tenancy invariants, integrity notes
