@@ -1,0 +1,337 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  OWNER
+  MANAGER
+  EDITOR
+}
+
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum ScanSource {
+  QR
+  DIRECT
+}
+
+enum DocumentType {
+  MANUAL
+  WARRANTY
+  DATASHEET
+}
+
+model Organisation {
+  id                     String    @id @default(uuid())
+  name                   String
+  publicSlug             String    @unique
+  logoUrl                String?
+  accentColor            String?
+  description            String?
+  contactEmail           String?
+  website                String?
+  country                String?
+  industry               String?
+  emailCollectionEnabled Boolean   @default(false)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  disabledAt             DateTime?
+
+  users           User[]
+  categories      Category[]
+  countries       Country[]
+  materialPresets MaterialPreset[]
+  products        Product[]
+  auditLogEntries AuditLogEntry[]
+  invitations     Invitation[]
+
+  @@map("organisations")
+}
+
+// PlatformAdmin and PlatformAuditLogEntry removed.
+
+model User {
+  id             String        @id @default(uuid())
+  email          String        @unique
+  passwordHash   String
+  name           String
+  role           Role          @default(EDITOR)
+  organisationId String?
+  organisation   Organisation? @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  avatarUrl      String?
+  language       String       @default("en")
+  createdAt      DateTime     @default(now())
+  lastLoginAt    DateTime?
+  disabledAt     DateTime?
+
+  invitationsSent   Invitation[]      @relation("InvitedBy")
+  publishedVersions PassportVersion[]
+  auditLogEntries   AuditLogEntry[]
+
+  @@index([organisationId])
+  @@map("users")
+}
+
+model Invitation {
+  id             String       @id @default(uuid())
+  email          String
+  role           Role         @default(EDITOR)
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  token          String       @unique
+  invitedById    String
+  invitedBy      User         @relation("InvitedBy", fields: [invitedById], references: [id])
+  acceptedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  expiresAt      DateTime
+
+  @@index([organisationId])
+  @@map("invitations")
+}
+
+model Category {
+  id             String       @id @default(uuid())
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  name           String
+  archivedAt     DateTime?
+
+  products Product[]
+
+  @@unique([organisationId, name])
+  @@unique([id, organisationId])
+  @@map("categories")
+}
+
+model Country {
+  id             String       @id @default(uuid())
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  name           String
+  code           String
+
+  products  Product[]
+  materials Material[]
+
+  @@unique([organisationId, code])
+  @@unique([id, organisationId])
+  @@map("countries")
+}
+
+model MaterialPreset {
+  id             String       @id @default(uuid())
+  organisationId String
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  name           String
+  group          String       @default("Other")
+
+  @@unique([organisationId, name])
+  @@map("material_presets")
+}
+
+model Product {
+  id                String                   @id @default(uuid())
+  organisationId    String
+  organisation      Organisation             @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  name              String
+  sku               String
+  serialNumber      String?
+  categoryId        String?
+  category          Category?                @relation(fields: [categoryId, organisationId], references: [id, organisationId])
+  description       String?
+  productionDate    DateTime?
+  countryOfOriginId String?
+  countryOfOrigin   Country?                 @relation(fields: [countryOfOriginId, organisationId], references: [id, organisationId])
+  status            ProductStatus            @default(DRAFT)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  deletedAt         DateTime?
+  searchVector      Unsupported("tsvector")? @default(dbgenerated("to_tsvector('simple'::regconfig, ((((COALESCE(name, ''::text) || ' '::text) || COALESCE(sku, ''::text)) || ' '::text) || COALESCE(description, ''::text)))"))
+
+  materials      Material[]
+  sustainability Sustainability?
+  certifications Certification[]
+  documents      Document[]
+  images         ProductImage[]
+  passport       Passport?
+
+  @@unique([id, organisationId])
+  // Live SKU uniqueness is a partial unique index in SQL
+  // (products_organisationId_sku_live_key WHERE deletedAt IS NULL).
+  @@index([organisationId, sku])
+  @@index([organisationId, deletedAt, createdAt])
+  @@index([organisationId, status, deletedAt])
+  @@index([searchVector], type: Gin)
+  @@map("products")
+}
+
+model Material {
+  id                String   @id @default(uuid())
+  productId         String
+  organisationId    String
+  product           Product  @relation(fields: [productId, organisationId], references: [id, organisationId], onDelete: Cascade)
+  name              String
+  percentage        Float
+  countryOfOriginId String?
+  countryOfOrigin   Country? @relation(fields: [countryOfOriginId, organisationId], references: [id, organisationId])
+  recyclable        Boolean  @default(false)
+  sortOrder         Int      @default(0)
+
+  @@index([productId])
+  @@map("materials")
+}
+
+model Sustainability {
+  id                 String  @id @default(uuid())
+  productId          String  @unique
+  product            Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  carbonFootprintKg  Float?
+  waterConsumptionL  Float?
+  recycledPercent    Float?
+  repairabilityScore Int?
+  recyclable         Boolean @default(false)
+
+  @@map("sustainability")
+}
+
+model Certification {
+  id               String    @id @default(uuid())
+  productId        String
+  product          Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name             String
+  issuingAuthority String?
+  issueDate        DateTime?
+  expiryDate       DateTime?
+  fileKey          String?
+  fileName         String?
+  sortOrder        Int       @default(0)
+
+  @@index([productId])
+  @@map("certifications")
+}
+
+model Document {
+  id        String       @id @default(uuid())
+  productId String
+  product   Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type      DocumentType
+  fileKey   String
+  fileName  String
+  sizeBytes Int
+  sortOrder Int          @default(0)
+
+  @@index([productId])
+  @@map("documents")
+}
+
+model ProductImage {
+  id        String  @id @default(uuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  fileKey   String
+  isCover   Boolean @default(false)
+  altText   String?
+  sortOrder Int     @default(0)
+
+  @@index([productId])
+  @@map("product_images")
+}
+
+model Passport {
+  id            String    @id @default(uuid())
+  productId     String    @unique
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  uuid          String    @unique @default(uuid())
+  version       Int       @default(0)
+  createdAt     DateTime  @default(now())
+  publishedAt   DateTime?
+  unpublishedAt DateTime?
+  qrKey         String?
+  qrUrl         String?
+
+  history PassportVersion[]
+  scans   Scan[]
+  items   ProductItem[]
+
+  @@map("passports")
+}
+
+model PassportVersion {
+  id             String   @id @default(uuid())
+  passportId     String
+  passport       Passport @relation(fields: [passportId], references: [id], onDelete: Cascade)
+  organisationId String
+  version        Int
+  snapshot       Json
+  publishedAt    DateTime @default(now())
+  publishedById  String
+  publishedBy    User     @relation(fields: [publishedById], references: [id])
+
+  @@unique([passportId, version])
+  @@index([organisationId])
+  @@map("passport_versions")
+}
+
+model Scan {
+  id              String       @id @default(uuid())
+  passportId      String
+  passport        Passport     @relation(fields: [passportId], references: [id], onDelete: Cascade)
+  productItemId   String?
+  productItem     ProductItem? @relation(fields: [productItemId], references: [id], onDelete: Cascade)
+  timestamp       DateTime     @default(now())
+  source          ScanSource   @default(DIRECT)
+  ipHash          String?
+  ipTruncated     String?
+  browser         String?
+  os              String?
+  browserLanguage String?
+  country         String?
+  referrer        String?
+  dedupKey        String?  @unique
+
+  @@index([passportId, timestamp])
+  @@index([timestamp])
+  @@map("scans")
+}
+
+model AuditLogEntry {
+  id             String        @id @default(uuid())
+  organisationId String?
+  organisation   Organisation? @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  actorId        String
+  actor          User          @relation(fields: [actorId], references: [id])
+  action         String
+  entityType     String
+  entityId       String
+  diff           Json?
+  createdAt      DateTime     @default(now())
+
+  @@index([organisationId])
+  @@index([entityType, entityId])
+  @@map("audit_log_entries")
+}
+
+model ProductItem {
+  id           String   @id @default(uuid())
+  passportId   String
+  passport     Passport @relation(fields: [passportId], references: [id], onDelete: Cascade)
+  serialNumber String?
+  batchId      String?
+  qrKey        String?
+  qrUrl        String?
+  createdAt    DateTime @default(now())
+
+  scans Scan[]
+
+  @@index([passportId])
+  @@map("product_items")
+}
