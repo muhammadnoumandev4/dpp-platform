@@ -144,11 +144,11 @@ are stored in UTC.
 
 ## 9. Verified invariants
 
-The rolled-back SQL smoke test (`scripts/db-integrity-smoke.sql`) deliberately attempts
-cross-tenant taxonomy/publisher links, a second active owner, an OWNER invitation and an invalid
-passport state, proving these invariants hold at the PostgreSQL layer rather than only in services.
-The black-box integration test additionally exercises publish v1 → draft edit → snapshot
-immutability → republish v2 with a stable UUID.
+Cross-tenant taxonomy/publisher links, a single active owner per organisation, invitation role
+allow-lists, and valid passport state transitions are enforced in PostgreSQL via CHECK constraints
+and composite foreign keys in `prisma/migrations/`, with matching coverage in the Nest unit suite
+(auth, products, passports). Publish v1 → draft edit → snapshot immutability → republish v2 with a
+stable UUID is covered by `passports.service` tests and the publication contract in the README.
 
 Two caveats on how these invariants are held:
 

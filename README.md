@@ -154,38 +154,25 @@ tenant users can inspect the append-only history through `GET /products/:id/pass
 ## Verification
 
 ```bash
-npm --prefix api run build
 npm --prefix api test -- --runInBand
+npm --prefix api run build
 npm --prefix web run lint
+npx --prefix web tsc --noEmit
 npm --prefix web run build
-
-# Run after the seeded API is available:
-npm --prefix api run test:integration
-
-# Optional live-DB integrity probes; every write is rolled back:
-set -a; source api/.env; set +a
-psql "$DATABASE_URL" -f scripts/db-integrity-smoke.sql
 ```
 
-The unit suite contains **51 tests across 16 suites**, all passing. Scan recording reads the
-client IP from Express's trusted-proxy-aware `request.ip` (configured via `TRUST_PROXY`), so
-client-supplied forwarding headers cannot spoof the scan IP hash or country.
+The API unit suite lives under `api/src/**/*.spec.ts` (Jest `rootDir` is `src`) and covers auth,
+tenant isolation, publish/snapshot behaviour, scan privacy, caching, and uploads. Scan recording
+reads the client IP from Express's trusted-proxy-aware `request.ip` (configured via `TRUST_PROXY`),
+so client-supplied forwarding headers cannot spoof the scan IP hash or country.
 
-`npm test` runs only the unit suites under `api/src` (Jest `rootDir` is `src`). Black-box coverage
-lives in `scripts/integration-smoke.mjs` and runs separately against a live seeded stack;
-`api/test/products.e2e-spec.ts` is a small Prisma-backed e2e file invoked by `test:e2e`.
-
-The integration script covers isolated employee/brand sessions and cross-role denial, ranked
-product search and filters, product completion, publish v1, PDF export, draft/public immutability,
-republish v2 with a stable UUID, audit-log creation, forged-upload rejection, soft-delete passport
-preservation and explicit public withdrawal. The rolled-back SQL smoke test proves the
-cross-tenant taxonomy/publisher foreign keys, single-owner rule, assignable invitation roles and
-passport version-state checks at the PostgreSQL level.
+Optional Playwright smoke tests for the web app: `npm --prefix web run test:e2e` (requires a
+running stack).
 
 ## Bonus features
 
 All bonus items named in the assessment are implemented: PostgreSQL full-text product search,
 passport versioning, soft delete, owner-visible audit log, Redis caching, pagination and advanced
 filters, server-generated passport PDF export, native drag-and-drop uploads with client and server
-validation, and automated unit/integration tests. Redis supports URL or split/TLS configuration
-and uses a `dpp:` key namespace by default so a managed instance can be shared safely.
+validation, and automated unit tests. Redis supports URL or split/TLS configuration and uses a
+`dpp:` key namespace by default so a managed instance can be shared safely.

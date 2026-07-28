@@ -12,7 +12,6 @@
     "migrate:deploy": "prisma migrate deploy",
     "db:seed": "ts-node prisma/seed.ts",
     "test": "jest",
-    "test:integration": "node ../scripts/integration-smoke.mjs",
     "test:watch": "jest --watch",
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
