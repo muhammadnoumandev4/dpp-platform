@@ -103,15 +103,35 @@ need `web/.env.local` when running only via `docker compose up --build`.
 
 ## Demo accounts
 
-Password for both: **`password123`**
+Password for **all** seed users: **`password123`**
 
-| Email | Role | Opens |
+| Email | Role | Opens / purpose |
 |---|---|---|
-| `editor@notarify.test` | Brand **OWNER** (Notarify) | http://localhost:3001/ |
+| `editor@notarify.test` | Brand **OWNER** (Notarify) | http://localhost:3001/ — full brand back office |
+| `manager@notarify.test` | **MANAGER** | Publish allowed; no team/archive/settings |
+| `member@notarify.test` | **EDITOR** | Edit drafts only; cannot publish |
 | `admin@notarify.test` | Platform **ADMIN** | http://localhost:3001/admin |
+| `atlas.owner@atlas.test` | **OWNER** (Atlas Goods) | Second brand for multi-tenant / admin tests |
 
-Both use the same login form; the app routes by role after sign-in. Despite the email prefix,
-`editor@notarify.test` is the brand **owner**, not an `EDITOR`-role user.
+Both brand and admin use the same login form; the app routes by role after sign-in. Despite the
+email prefix, `editor@notarify.test` is the brand **owner**, not an `EDITOR`-role user.
+
+### Seeded products (Notarify) — what to click
+
+| SKU | State | What to test |
+|---|---|---|
+| `NTF-4192-BLK` | Incomplete draft (no cover) | Publish blockers |
+| `NTF-READY-001` | Complete draft + cover/certs/docs | Click **Publish** |
+| `NTF-LIVE-100` | Published + QR + scans + unit items + 2 versions | Passport, analytics, inventory, version history |
+| `NTF-OFF-300` | Unpublished | Public URL withdrawn |
+| `NTF-ARCH-200` | Soft-deleted | Archive behaviour |
+| `NTF-EMPTY-400` | Minimal draft | Edit flows |
+
+Atlas Goods also has a published `ATL-PARKA-01` for the platform admin console.
+
+After seed, the API log prints the live public passport URL for `NTF-LIVE-100`.
+
+A pending invitation exists for `invitee@notarify.test` (Users → invitations).
 
 ---
 
