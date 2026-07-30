@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useCallback, useEffect, useState } from 'react';
+import { Fragment, ReactNode, useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   AppBar,
@@ -9,6 +9,7 @@ import {
   ButtonBase,
   Chip,
   CircularProgress,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -19,6 +20,7 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  MenuItem,
   Paper,
   Table,
   TableBody,
@@ -30,7 +32,10 @@ import {
   Toolbar,
   Typography,
 } from '@mui/material';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
 import MenuIcon from '@mui/icons-material/Menu';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DownloadIcon from '@mui/icons-material/Download';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEventsOutlined';
@@ -148,10 +153,55 @@ interface AuditRow {
   action: string;
   entityType: string;
   entityId: string;
-  diff: any;
+  entityLabel: string | null;
+  diff: Record<string, unknown> | null;
   createdAt: string;
   actor: { name: string; email: string; role: string };
   organisation: { name: string } | null;
+}
+
+interface AuditResponse {
+  rows: AuditRow[];
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+  facets: { actions: Array<{ action: string; count: number }> };
+}
+
+interface AuditFilters {
+  search: string;
+  action: string;
+  organisationId: string;
+  from: string;
+  to: string;
+}
+
+const EMPTY_AUDIT_FILTERS: AuditFilters = { search: '', action: '', organisationId: '', from: '', to: '' };
+
+const AUDIT_PAGE_SIZE = 25;
+
+/** Entries the platform itself wrote (brand suspension, registration) carry no organisation. */
+const PLATFORM_SCOPE = 'platform';
+
+function auditActionColour(action: string) {
+  if (/(SUSPENDED|REMOVED|DEACTIVATED|ARCHIVED|UNPUBLISHED)$/.test(action)) return tokens.color.error;
+  if (/(PUBLISHED|REGISTERED|CREATED|ACCEPTED)$/.test(action)) return tokens.color.success;
+  return { main: tokens.color.neutral[700], bg: tokens.color.neutral[100], border: tokens.color.neutral[200] };
+}
+
+/** Diffs are written per action, so render whatever shape arrived without guessing. */
+function auditDiffEntries(diff: Record<string, unknown> | null): Array<{ key: string; value: string }> {
+  if (!diff) return [];
+  return Object.entries(diff).flatMap(([key, value]) => {
+    if (key === 'changed' && value && typeof value === 'object' && !Array.isArray(value)) {
+      return Object.entries(value as Record<string, unknown>).map(([field, change]) => {
+        const { from, to } = (change ?? {}) as { from?: unknown; to?: unknown };
+        return { key: field, value: `${JSON.stringify(from ?? null)} → ${JSON.stringify(to ?? null)}` };
+      });
+    }
+    return [{ key, value: typeof value === 'string' ? value : JSON.stringify(value) }];
+  });
 }
 
 type SectionKey = 'overview' | 'brands' | 'passports' | 'scans' | 'audit';
@@ -268,6 +318,9 @@ export default function PlatformAdminPage() {
   const router = useRouter();
   const { user, loading, logout } = useAuth();
   const [section, setSection] = useState<SectionKey>('overview');
+  const muiTheme = useTheme();
+  const compactScreen = useMediaQuery(muiTheme.breakpoints.down('sm'));
+
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -281,7 +334,12 @@ export default function PlatformAdminPage() {
   const [selectedSnapshot, setSelectedSnapshot] = useState<any | null>(null);
 
   const [scans, setScans] = useState<ScanRow[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditRow[]>([]);
+  const [audit, setAudit] = useState<AuditResponse | null>(null);
+  const [auditFilters, setAuditFilters] = useState<AuditFilters>(EMPTY_AUDIT_FILTERS);
+  const [auditSearchInput, setAuditSearchInput] = useState('');
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [expandedAudit, setExpandedAudit] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const confirm = useConfirm();
@@ -322,13 +380,27 @@ export default function PlatformAdminPage() {
   }, [toast]);
 
   const loadAuditLogs = useCallback(async () => {
+    const params = new URLSearchParams({ limit: String(AUDIT_PAGE_SIZE), page: String(auditPage) });
+    if (auditFilters.search) params.set('search', auditFilters.search);
+    if (auditFilters.action) params.set('action', auditFilters.action);
+    if (auditFilters.organisationId) params.set('organisationId', auditFilters.organisationId);
+    if (auditFilters.from) params.set('from', auditFilters.from);
+    if (auditFilters.to) params.set('to', auditFilters.to);
+
+    setAuditLoading(true);
     try {
-      const res = await api.get<{ rows: AuditRow[] }>('/platform-admin/audit-logs?limit=50');
-      setAuditLogs(res.rows);
+      setAudit(await api.get<AuditResponse>(`/platform-admin/audit-logs?${params}`));
     } catch (err) {
       toast.error('Could not load audit trail.');
+    } finally {
+      setAuditLoading(false);
     }
-  }, [toast]);
+  }, [auditFilters, auditPage, toast]);
+
+  function updateAuditFilter(patch: Partial<AuditFilters>) {
+    setAuditFilters((current) => ({ ...current, ...patch }));
+    setAuditPage(1);
+  }
 
   const refreshAll = useCallback(() => {
     loadOverviewAndBrands(brandSearch);
@@ -352,10 +424,22 @@ export default function PlatformAdminPage() {
     if (user?.role === 'ADMIN') {
       if (section === 'passports') loadPassports(passportSearch);
       if (section === 'scans') loadScans();
-      if (section === 'audit') loadAuditLogs();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [section, user]);
+
+  // The audit trail refetches server-side on every filter or page change.
+  useEffect(() => {
+    if (user?.role === 'ADMIN' && section === 'audit') loadAuditLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [section, user, auditFilters, auditPage]);
+
+  useEffect(() => {
+    if (auditSearchInput === auditFilters.search) return;
+    const timer = setTimeout(() => updateAuditFilter({ search: auditSearchInput.trim() }), 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auditSearchInput]);
 
   async function inspectBrand(id: string) {
     try {
@@ -406,6 +490,21 @@ export default function PlatformAdminPage() {
     const header = 'Brand,Product,SKU,Browser,OS,Country,Timestamp\n';
     const rows = scans.map((s) => `"${s.brandName}","${s.productName}","${s.productSku}","${s.browser || ''}","${s.os || ''}","${s.country || ''}","${s.timestamp}"`).join('\n');
     downloadCsv(`notarify_scans_${new Date().toISOString().split('T')[0]}.csv`, header + rows);
+  }
+
+  function exportAuditCsv() {
+    if (!audit?.rows.length) return;
+    const header = 'Timestamp,Actor,Email,Role,Action,EntityType,Entity,EntityId,Brand,Details\n';
+    const rows = audit.rows
+      .map((log) => {
+        const details = auditDiffEntries(log.diff)
+          .map((entry) => `${entry.key}: ${entry.value}`)
+          .join('; ')
+          .replaceAll('"', '""');
+        return `"${log.createdAt}","${log.actor.name}","${log.actor.email}","${log.actor.role}","${log.action}","${log.entityType}","${log.entityLabel ?? ''}","${log.entityId}","${log.organisation?.name ?? 'Platform System'}","${details}"`;
+      })
+      .join('\n');
+    downloadCsv(`notarify_audit_${new Date().toISOString().split('T')[0]}.csv`, header + rows);
   }
 
   if (loading || !user || user.role !== 'ADMIN' || !overview || !brands) {
@@ -683,43 +782,87 @@ export default function PlatformAdminPage() {
                   </Box>
                 </Box>
               </Box>
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Brand</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell align="right">Users</TableCell>
-                      <TableCell align="right">Products</TableCell>
-                      <TableCell align="right">Passports</TableCell>
-                      <TableCell align="right">Scans</TableCell>
-                      <TableCell align="right">Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {brands.map((brand) => (
-                      <TableRow key={brand.id} hover>
-                        <TableCell>
-                          <Typography variant="subtitle2">{brand.name}</Typography>
+              {compactScreen ? (
+                // Operators triage brands from a phone; cards beat seven columns.
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  {brands.map((brand) => (
+                    <Box key={brand.id} sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: `${tokens.radius.lg}px` }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography variant="subtitle2" noWrap>{brand.name}</Typography>
                           <Typography variant="caption" color="text.secondary">{brand.publicSlug}</Typography>
-                        </TableCell>
-                        <TableCell><Chip size="small" color={brand.disabledAt ? 'error' : 'success'} label={brand.disabledAt ? 'Suspended' : 'Active'} /></TableCell>
-                        <TableCell align="right">{brand.users}</TableCell>
-                        <TableCell align="right">{brand.products}</TableCell>
-                        <TableCell align="right">{brand.publishedPassports}</TableCell>
-                        <TableCell align="right">{brand.scans}</TableCell>
-                        <TableCell align="right">
-                          <Button size="small" onClick={() => inspectBrand(brand.id)}>View</Button>
-                          <Button size="small" color={brand.disabledAt ? 'success' : 'error'} onClick={() => setBrandActive(brand, Boolean(brand.disabledAt))}>
-                            {brand.disabledAt ? 'Reactivate' : 'Suspend'}
-                          </Button>
-                        </TableCell>
+                        </Box>
+                        <Chip size="small" color={brand.disabledAt ? 'error' : 'success'} label={brand.disabledAt ? 'Suspended' : 'Active'} />
+                      </Box>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 1.5 }}>
+                        {[
+                          { label: 'Users', value: brand.users },
+                          { label: 'Products', value: brand.products },
+                          { label: 'Passports', value: brand.publishedPassports },
+                          { label: 'Scans', value: brand.scans },
+                        ].map((stat) => (
+                          <Box key={stat.label}>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{stat.label}</Typography>
+                            <Typography variant="subtitle2">{stat.value}</Typography>
+                          </Box>
+                        ))}
+                      </Box>
+                      <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>
+                        <Button size="small" variant="outlined" onClick={() => inspectBrand(brand.id)}>View</Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color={brand.disabledAt ? 'success' : 'error'}
+                          onClick={() => setBrandActive(brand, Boolean(brand.disabledAt))}
+                        >
+                          {brand.disabledAt ? 'Reactivate' : 'Suspend'}
+                        </Button>
+                      </Box>
+                    </Box>
+                  ))}
+                  {brands.length === 0 && (
+                    <Typography variant="body2" color="text.secondary">No matching brands.</Typography>
+                  )}
+                </Box>
+              ) : (
+                <TableContainer>
+                  <Table sx={{ minWidth: 820 }}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Brand</TableCell>
+                        <TableCell>Status</TableCell>
+                        <TableCell align="right">Users</TableCell>
+                        <TableCell align="right">Products</TableCell>
+                        <TableCell align="right">Passports</TableCell>
+                        <TableCell align="right">Scans</TableCell>
+                        <TableCell align="right">Actions</TableCell>
                       </TableRow>
-                    ))}
-                    {brands.length === 0 && <TableRow><TableCell colSpan={7}>No matching brands.</TableCell></TableRow>}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                    </TableHead>
+                    <TableBody>
+                      {brands.map((brand) => (
+                        <TableRow key={brand.id} hover>
+                          <TableCell>
+                            <Typography variant="subtitle2">{brand.name}</Typography>
+                            <Typography variant="caption" color="text.secondary">{brand.publicSlug}</Typography>
+                          </TableCell>
+                          <TableCell><Chip size="small" color={brand.disabledAt ? 'error' : 'success'} label={brand.disabledAt ? 'Suspended' : 'Active'} /></TableCell>
+                          <TableCell align="right">{brand.users}</TableCell>
+                          <TableCell align="right">{brand.products}</TableCell>
+                          <TableCell align="right">{brand.publishedPassports}</TableCell>
+                          <TableCell align="right">{brand.scans}</TableCell>
+                          <TableCell align="right">
+                            <Button size="small" onClick={() => inspectBrand(brand.id)}>View</Button>
+                            <Button size="small" color={brand.disabledAt ? 'success' : 'error'} onClick={() => setBrandActive(brand, Boolean(brand.disabledAt))}>
+                              {brand.disabledAt ? 'Reactivate' : 'Suspend'}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {brands.length === 0 && <TableRow><TableCell colSpan={7}>No matching brands.</TableCell></TableRow>}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
             </Paper>
           )}
 
@@ -732,41 +875,77 @@ export default function PlatformAdminPage() {
                   <Button type="submit" variant="outlined">Search</Button>
                 </Box>
               </Box>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Brand</TableCell>
-                      <TableCell>Product / SKU</TableCell>
-                      <TableCell>Version</TableCell>
-                      <TableCell>Passport UUID</TableCell>
-                      <TableCell>Published</TableCell>
-                      <TableCell align="right">Scans</TableCell>
-                      <TableCell align="right">Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {passports.map((p) => (
-                      <TableRow key={p.id} hover>
-                        <TableCell><Typography variant="subtitle2">{p.product.organisation.name}</Typography></TableCell>
-                        <TableCell>
-                          <Typography variant="subtitle2">{p.product.name}</Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontFamily: tokens.font.family.mono }}>{p.product.sku}</Typography>
-                        </TableCell>
-                        <TableCell><Chip size="small" label={`v${p.version}`} color="primary" variant="outlined" /></TableCell>
-                        <TableCell sx={{ fontFamily: tokens.font.family.mono, fontSize: 13 }}>{p.uuid}</TableCell>
-                        <TableCell>{new Date(p.publishedAt).toLocaleDateString()}</TableCell>
-                        <TableCell align="right"><Typography variant="subtitle2" sx={{ fontFamily: tokens.font.family.mono }}>{p.scansCount}</Typography></TableCell>
-                        <TableCell align="right">
-                          <Button size="small" onClick={() => setSelectedSnapshot(p.latestSnapshot)}>View JSON</Button>
-                          <Button size="small" href={`/passport/${p.uuid}`} target="_blank">Open</Button>
-                        </TableCell>
+              {compactScreen ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  {passports.map((p) => (
+                    <Box key={p.id} sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: `${tokens.radius.lg}px` }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography variant="subtitle2" noWrap>{p.product.name}</Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontFamily: tokens.font.family.mono }}>
+                            {p.product.sku}
+                          </Typography>
+                        </Box>
+                        <Chip size="small" label={`v${p.version}`} color="primary" variant="outlined" />
+                      </Box>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                        {p.product.organisation.name} · published {new Date(p.publishedAt).toLocaleDateString()} ·{' '}
+                        {p.scansCount} {p.scansCount === 1 ? 'scan' : 'scans'}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: 'block', fontFamily: tokens.font.family.mono, wordBreak: 'break-all' }}
+                      >
+                        {p.uuid}
+                      </Typography>
+                      <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>
+                        <Button size="small" variant="outlined" onClick={() => setSelectedSnapshot(p.latestSnapshot)}>View JSON</Button>
+                        <Button size="small" variant="outlined" href={`/passport/${p.uuid}`} target="_blank">Open</Button>
+                      </Box>
+                    </Box>
+                  ))}
+                  {passports.length === 0 && (
+                    <Typography variant="body2" color="text.secondary">No published passports found.</Typography>
+                  )}
+                </Box>
+              ) : (
+                <TableContainer>
+                  <Table size="small" sx={{ minWidth: 900 }}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Brand</TableCell>
+                        <TableCell>Product / SKU</TableCell>
+                        <TableCell>Version</TableCell>
+                        <TableCell>Passport UUID</TableCell>
+                        <TableCell>Published</TableCell>
+                        <TableCell align="right">Scans</TableCell>
+                        <TableCell align="right">Actions</TableCell>
                       </TableRow>
-                    ))}
-                    {passports.length === 0 && <TableRow><TableCell colSpan={7}>No published passports found.</TableCell></TableRow>}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                    </TableHead>
+                    <TableBody>
+                      {passports.map((p) => (
+                        <TableRow key={p.id} hover>
+                          <TableCell><Typography variant="subtitle2">{p.product.organisation.name}</Typography></TableCell>
+                          <TableCell>
+                            <Typography variant="subtitle2">{p.product.name}</Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ fontFamily: tokens.font.family.mono }}>{p.product.sku}</Typography>
+                          </TableCell>
+                          <TableCell><Chip size="small" label={`v${p.version}`} color="primary" variant="outlined" /></TableCell>
+                          <TableCell sx={{ fontFamily: tokens.font.family.mono, fontSize: 13 }}>{p.uuid}</TableCell>
+                          <TableCell>{new Date(p.publishedAt).toLocaleDateString()}</TableCell>
+                          <TableCell align="right"><Typography variant="subtitle2" sx={{ fontFamily: tokens.font.family.mono }}>{p.scansCount}</Typography></TableCell>
+                          <TableCell align="right">
+                            <Button size="small" onClick={() => setSelectedSnapshot(p.latestSnapshot)}>View JSON</Button>
+                            <Button size="small" href={`/passport/${p.uuid}`} target="_blank">Open</Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {passports.length === 0 && <TableRow><TableCell colSpan={7}>No published passports found.</TableCell></TableRow>}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
             </Paper>
           )}
 
@@ -776,72 +955,342 @@ export default function PlatformAdminPage() {
                 <Typography variant="h3">Latest scans</Typography>
                 <Button variant="outlined" startIcon={<DownloadIcon />} onClick={exportScansCsv}>Export CSV</Button>
               </Box>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Brand</TableCell>
-                      <TableCell>Product</TableCell>
-                      <TableCell>Browser / OS</TableCell>
-                      <TableCell>Country</TableCell>
-                      <TableCell>Timestamp</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {scans.map((s) => (
-                      <TableRow key={s.id} hover>
-                        <TableCell><Typography variant="subtitle2">{s.brandName}</Typography></TableCell>
-                        <TableCell>{s.productName}</TableCell>
-                        <TableCell>{[s.browser, s.os].filter(Boolean).join(' / ') || '—'}</TableCell>
-                        <TableCell><Chip size="small" variant="outlined" label={getCountryDisplay(s.country)} /></TableCell>
-                        <TableCell>{new Date(s.timestamp).toLocaleString()}</TableCell>
+              {compactScreen ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  {scans.map((s) => (
+                    <Box key={s.id} sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: `${tokens.radius.lg}px` }}>
+                      <Typography variant="subtitle2" noWrap>{s.productName}</Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        {s.brandName} · {new Date(s.timestamp).toLocaleString()}
+                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1, flexWrap: 'wrap' }}>
+                        <Chip size="small" variant="outlined" label={getCountryDisplay(s.country)} />
+                        <Typography variant="caption" color="text.secondary">
+                          {[s.browser, s.os].filter(Boolean).join(' / ') || 'Unknown device'}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  ))}
+                  {scans.length === 0 && (
+                    <Typography variant="body2" color="text.secondary">No scans recorded yet.</Typography>
+                  )}
+                </Box>
+              ) : (
+                <TableContainer>
+                  <Table size="small" sx={{ minWidth: 720 }}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Brand</TableCell>
+                        <TableCell>Product</TableCell>
+                        <TableCell>Browser / OS</TableCell>
+                        <TableCell>Country</TableCell>
+                        <TableCell>Timestamp</TableCell>
                       </TableRow>
-                    ))}
-                    {scans.length === 0 && <TableRow><TableCell colSpan={5}>No scans recorded yet.</TableCell></TableRow>}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                    </TableHead>
+                    <TableBody>
+                      {scans.map((s) => (
+                        <TableRow key={s.id} hover>
+                          <TableCell><Typography variant="subtitle2">{s.brandName}</Typography></TableCell>
+                          <TableCell>{s.productName}</TableCell>
+                          <TableCell>{[s.browser, s.os].filter(Boolean).join(' / ') || '—'}</TableCell>
+                          <TableCell><Chip size="small" variant="outlined" label={getCountryDisplay(s.country)} /></TableCell>
+                          <TableCell>{new Date(s.timestamp).toLocaleString()}</TableCell>
+                        </TableRow>
+                      ))}
+                      {scans.length === 0 && <TableRow><TableCell colSpan={5}>No scans recorded yet.</TableCell></TableRow>}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
             </Paper>
           )}
 
           {section === 'audit' && (
             <Paper sx={{ p: 3 }}>
-              <Typography variant="h3" sx={{ mb: 3 }}>Administrative audit trail</Typography>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Actor</TableCell>
-                      <TableCell>Action</TableCell>
-                      <TableCell>Entity Type / ID</TableCell>
-                      <TableCell>Brand</TableCell>
-                      <TableCell>Timestamp</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {auditLogs.map((log) => (
-                      <TableRow key={log.id} hover>
-                        <TableCell>
-                          <Typography variant="subtitle2">{log.actor.name}</Typography>
-                          <Typography variant="caption" color="text.secondary">{log.actor.email} ({log.actor.role})</Typography>
-                        </TableCell>
-                        <TableCell><Chip size="small" label={log.action} color={log.action.includes('SUSPENDED') ? 'error' : 'default'} /></TableCell>
-                        <TableCell>{log.entityType}: <span style={{ fontFamily: tokens.font.family.mono }}>{log.entityId}</span></TableCell>
-                        <TableCell>{log.organisation?.name || 'Platform System'}</TableCell>
-                        <TableCell>{new Date(log.createdAt).toLocaleString()}</TableCell>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+                <Typography variant="h3">Administrative audit trail</Typography>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<DownloadIcon />}
+                  disabled={!audit?.rows.length}
+                  onClick={exportAuditCsv}
+                >
+                  Export page
+                </Button>
+              </Box>
+
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+                <TextField
+                  size="small"
+                  placeholder="Actor, brand or entity ID"
+                  value={auditSearchInput}
+                  onChange={(event) => setAuditSearchInput(event.target.value)}
+                  sx={{ flex: '2 1 220px' }}
+                  inputProps={{ 'aria-label': 'Search audit trail' }}
+                />
+                <TextField
+                  select
+                  size="small"
+                  label="Action"
+                  value={auditFilters.action}
+                  onChange={(event) => updateAuditFilter({ action: event.target.value })}
+                  sx={{ flex: '1 1 200px' }}
+                >
+                  <MenuItem value="">All actions</MenuItem>
+                  {(audit?.facets.actions ?? []).map((facet) => (
+                    <MenuItem key={facet.action} value={facet.action}>
+                      {facet.action} ({facet.count})
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  select
+                  size="small"
+                  label="Scope"
+                  value={auditFilters.organisationId}
+                  onChange={(event) => updateAuditFilter({ organisationId: event.target.value })}
+                  sx={{ flex: '1 1 180px' }}
+                >
+                  <MenuItem value="">All brands</MenuItem>
+                  <MenuItem value={PLATFORM_SCOPE}>Platform system</MenuItem>
+                  {brands.map((brand) => (
+                    <MenuItem key={brand.id} value={brand.id}>{brand.name}</MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  size="small"
+                  type="date"
+                  label="From"
+                  InputLabelProps={{ shrink: true }}
+                  value={auditFilters.from}
+                  onChange={(event) => updateAuditFilter({ from: event.target.value })}
+                  sx={{ flex: '1 1 150px' }}
+                />
+                <TextField
+                  size="small"
+                  type="date"
+                  label="To"
+                  InputLabelProps={{ shrink: true }}
+                  value={auditFilters.to}
+                  onChange={(event) => updateAuditFilter({ to: event.target.value })}
+                  sx={{ flex: '1 1 150px' }}
+                />
+                <Button
+                  size="small"
+                  sx={{ flex: '0 0 auto', alignSelf: { xs: 'flex-start', sm: 'center' } }}
+                  disabled={JSON.stringify(auditFilters) === JSON.stringify(EMPTY_AUDIT_FILTERS)}
+                  onClick={() => { setAuditSearchInput(''); setAuditFilters(EMPTY_AUDIT_FILTERS); setAuditPage(1); }}
+                >
+                  Reset
+                </Button>
+              </Box>
+
+              {compactScreen ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  {(audit?.rows ?? []).map((log) => {
+                    const colour = auditActionColour(log.action);
+                    const details = auditDiffEntries(log.diff);
+                    const open = expandedAudit === log.id;
+                    return (
+                      <Box key={log.id} sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: `${tokens.radius.lg}px` }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
+                          <Chip
+                            size="small"
+                            label={log.action}
+                            sx={{
+                              bgcolor: colour.bg,
+                              color: colour.main,
+                              border: '1px solid',
+                              borderColor: colour.border,
+                              fontFamily: tokens.font.family.mono,
+                              fontSize: 11,
+                            }}
+                          />
+                          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                            {new Date(log.createdAt).toLocaleString()}
+                          </Typography>
+                        </Box>
+                        <Typography variant="subtitle2" sx={{ mt: 1 }}>
+                          {log.entityLabel ?? `Deleted ${log.entityType.toLowerCase()}`}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: 'block', fontFamily: tokens.font.family.mono, wordBreak: 'break-all' }}
+                        >
+                          {log.entityType} · {log.entityId}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                          {log.actor.name} ({log.actor.role}) · {log.organisation?.name ?? 'Platform system'}
+                        </Typography>
+                        {details.length > 0 && (
+                          <>
+                            <Button size="small" sx={{ mt: 1, px: 0 }} onClick={() => setExpandedAudit(open ? null : log.id)}>
+                              {open ? 'Hide change details' : 'Show change details'}
+                            </Button>
+                            <Collapse in={open} unmountOnExit>
+                              <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                {details.map((entry) => (
+                                  <Box key={entry.key}>
+                                    <Typography variant="caption" color="text.secondary">{entry.key}</Typography>
+                                    <Typography variant="caption" sx={{ display: 'block', fontFamily: tokens.font.family.mono, wordBreak: 'break-word' }}>
+                                      {entry.value}
+                                    </Typography>
+                                  </Box>
+                                ))}
+                              </Box>
+                            </Collapse>
+                          </>
+                        )}
+                      </Box>
+                    );
+                  })}
+                  {!auditLoading && audit?.rows.length === 0 && (
+                    <Typography variant="body2" color="text.secondary">No audit entries match these filters.</Typography>
+                  )}
+                </Box>
+              ) : (
+                <TableContainer>
+                  <Table size="small" sx={{ minWidth: 880 }}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ width: 40 }} />
+                        <TableCell>Timestamp</TableCell>
+                        <TableCell>Actor</TableCell>
+                        <TableCell>Action</TableCell>
+                        <TableCell>Entity</TableCell>
+                        <TableCell>Brand</TableCell>
                       </TableRow>
-                    ))}
-                    {auditLogs.length === 0 && <TableRow><TableCell colSpan={5}>No audit logs found.</TableCell></TableRow>}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                    </TableHead>
+                    <TableBody>
+                      {(audit?.rows ?? []).map((log) => {
+                        const colour = auditActionColour(log.action);
+                        const details = auditDiffEntries(log.diff);
+                        const open = expandedAudit === log.id;
+                        return (
+                          <Fragment key={log.id}>
+                            <TableRow
+                              hover
+                              onClick={() => setExpandedAudit(open ? null : log.id)}
+                              sx={{ cursor: details.length ? 'pointer' : 'default', '& > *': { borderBottom: open ? 'none' : undefined } }}
+                            >
+                              <TableCell>
+                                {details.length > 0 && (
+                                  <IconButton size="small" aria-label={open ? 'Hide change details' : 'Show change details'}>
+                                    <ExpandMoreIcon
+                                      fontSize="small"
+                                      sx={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 150ms' }}
+                                    />
+                                  </IconButton>
+                                )}
+                              </TableCell>
+                              <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                                <Typography variant="subtitle2">{new Date(log.createdAt).toLocaleDateString()}</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {new Date(log.createdAt).toLocaleTimeString()}
+                                </Typography>
+                              </TableCell>
+                              <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                                <Typography variant="subtitle2">{log.actor.name}</Typography>
+                                <Typography variant="caption" color="text.secondary">{log.actor.email} ({log.actor.role})</Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  size="small"
+                                  label={log.action}
+                                  sx={{
+                                    bgcolor: colour.bg,
+                                    color: colour.main,
+                                    border: '1px solid',
+                                    borderColor: colour.border,
+                                    fontFamily: tokens.font.family.mono,
+                                    fontSize: 11,
+                                  }}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant="subtitle2">
+                                  {log.entityLabel ?? <Box component="span" sx={{ color: 'text.disabled' }}>Deleted {log.entityType.toLowerCase()}</Box>}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary" sx={{ fontFamily: tokens.font.family.mono, whiteSpace: 'nowrap' }}>
+                                  {log.entityType} · {log.entityId}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                {log.organisation?.name ?? (
+                                  <Chip size="small" variant="outlined" label="Platform system" />
+                                )}
+                              </TableCell>
+                            </TableRow>
+                            <TableRow>
+                              <TableCell colSpan={6} sx={{ py: 0, borderBottom: open ? undefined : 'none' }}>
+                                <Collapse in={open} unmountOnExit>
+                                  <Box sx={{ py: 2, pl: 5 }}>
+                                    <Typography variant="overline" color="text.secondary">Recorded change</Typography>
+                                    <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 200px) 1fr', gap: 1, mt: 1 }}>
+                                      {details.map((entry) => (
+                                        <Fragment key={entry.key}>
+                                          <Typography variant="caption" color="text.secondary">{entry.key}</Typography>
+                                          <Typography variant="caption" sx={{ fontFamily: tokens.font.family.mono, wordBreak: 'break-word' }}>
+                                            {entry.value}
+                                          </Typography>
+                                        </Fragment>
+                                      ))}
+                                    </Box>
+                                  </Box>
+                                </Collapse>
+                              </TableCell>
+                            </TableRow>
+                          </Fragment>
+                        );
+                      })}
+                      {!auditLoading && audit?.rows.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={6}>
+                            <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+                              No audit entries match these filters.
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, mt: 2, flexWrap: 'wrap' }}>
+                <Typography variant="caption" color="text.secondary">
+                  {audit
+                    ? `${audit.total.toLocaleString()} entries · page ${audit.page} of ${audit.pages}`
+                    : 'Loading…'}
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    disabled={auditLoading || auditPage <= 1}
+                    onClick={() => setAuditPage((current) => Math.max(1, current - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    disabled={auditLoading || !audit || auditPage >= audit.pages}
+                    onClick={() => setAuditPage((current) => current + 1)}
+                  >
+                    Next
+                  </Button>
+                </Box>
+              </Box>
             </Paper>
           )}
         </Box>
       </Box>
 
       {/* BRAND DETAIL INSPECTION DIALOG */}
-      <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} maxWidth="md" fullWidth>
+      <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} maxWidth="md" fullWidth fullScreen={compactScreen}>
         <DialogTitle>{detail?.name}</DialogTitle>
         <DialogContent>
           {detail && (
@@ -866,7 +1315,7 @@ export default function PlatformAdminPage() {
       </Dialog>
 
       {/* SNAPSHOT JSON INSPECTOR DIALOG */}
-      <Dialog open={Boolean(selectedSnapshot)} onClose={() => setSelectedSnapshot(null)} maxWidth="md" fullWidth>
+      <Dialog open={Boolean(selectedSnapshot)} onClose={() => setSelectedSnapshot(null)} maxWidth="md" fullWidth fullScreen={compactScreen}>
         <DialogTitle>Immutable Passport Snapshot Data</DialogTitle>
         <DialogContent>
           {selectedSnapshot && (
