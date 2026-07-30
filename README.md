@@ -7,7 +7,8 @@ images), publish an immutable passport with a stable UUID/QR, and review scan an
 open the public passport without logging in.
 
 This README is the single entry point for **install, run, demo accounts, URLs, API docs, and
-verification**. Longer design notes live in [ARCHITECTURE.md](./ARCHITECTURE.md) and
+verification**. For a step-by-step reviewer checklist, use **[TESTING.md](./TESTING.md)**.
+Longer design notes live in [ARCHITECTURE.md](./ARCHITECTURE.md) and
 [docs/DATA-MODEL.md](./docs/DATA-MODEL.md).
 
 ---
@@ -139,7 +140,8 @@ Every brand is seeded with the same workflow set (SKU prefix `NTF` / `ATL` / `LU
 
 Also: pending invitations (`invitee@{brand}.test`), certs/docs/gallery on live/ready products.
 
-Suggested review path: login `admin@notarify.test` → browse brands → then `editor@notarify.test` for full brand MVP → switch to a Manager/Editor account to confirm permission boundaries.
+Suggested review path: follow **[TESTING.md](./TESTING.md)** (20-minute checklist: brand MVP →
+roles → platform admin → multi-brand isolation).
 
 ---
 
@@ -167,6 +169,7 @@ Optional: platform console with `admin@notarify.test` at `/admin`.
 | Migrations + seed | `api/prisma/migrations/`, `api/prisma/seed.ts` |
 | Swagger / OpenAPI | http://localhost:3000/api/docs (NestJS Swagger from DTOs) |
 | README (install + run) | this file |
+| Testing guide (reviewer checklist) | [TESTING.md](./TESTING.md) |
 | Architecture (2–3 pages) | [ARCHITECTURE.md](./ARCHITECTURE.md) |
 | Database design detail | [docs/DATA-MODEL.md](./docs/DATA-MODEL.md) + `api/prisma/schema.prisma` |
 
@@ -306,5 +309,6 @@ filters, passport PDF export, drag-and-drop uploads with server magic-byte check
 
 ## Architecture docs
 
+- [TESTING.md](./TESTING.md) — reviewer testing guide (accounts, checklists, feature map)
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — system design, decisions, security, scalability, future work
 - [docs/DATA-MODEL.md](./docs/DATA-MODEL.md) — schema, tenancy invariants, integrity notes
