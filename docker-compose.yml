@@ -55,7 +55,8 @@ services:
     ports:
       - '3000:3000'
     volumes:
-      - dpp_uploads:/app/uploads
+      # Bind-mount so host `npm run db:seed` and the API container share the same files.
+      - ./api/uploads:/app/uploads
     healthcheck:
       test: ['CMD', 'node', '-e', "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
@@ -81,5 +82,4 @@ services:
 
 volumes:
   dpp_postgres_data:
-  dpp_uploads:
   dpp_redis_data:

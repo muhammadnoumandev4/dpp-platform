@@ -19,11 +19,14 @@ const WEB_URL = process.env.WEB_PUBLIC_URL || 'http://localhost:3001';
 const API_URL = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
 const UPLOAD_DIR = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads');
 
-/** 1×1 PNG — enough for cover/gallery seeds and media serving. */
-const TINY_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-  'base64',
-);
+/** Visible seed artwork (QR-style PNG) so public passports are not blank 1×1 placeholders. */
+async function makePlaceholderPng(label: string): Promise<Buffer> {
+  return QRCode.toBuffer(`DPP seed · ${label}`, {
+    width: 640,
+    margin: 2,
+    color: { dark: '#0F3D2E', light: '#E7F2EC' },
+  });
+}
 
 /** Minimal valid-enough PDF header for download demos. */
 const TINY_PDF = Buffer.from(
@@ -159,7 +162,7 @@ async function ensureRichProduct(opts: SeedProductOpts) {
 
   if (opts.withCover) {
     const key = `${opts.organisationId}/images/${product.id}-cover.png`;
-    await putFile(key, TINY_PNG);
+    await putFile(key, await makePlaceholderPng(`${opts.sku} cover`));
     await prisma.productImage.create({
       data: { productId: product.id, fileKey: key, isCover: true, altText: 'Cover', sortOrder: 0 },
     });
@@ -168,7 +171,7 @@ async function ensureRichProduct(opts: SeedProductOpts) {
   if (opts.withGallery) {
     for (let i = 1; i <= 2; i++) {
       const key = `${opts.organisationId}/images/${product.id}-gallery-${i}.png`;
-      await putFile(key, TINY_PNG);
+      await putFile(key, await makePlaceholderPng(`${opts.sku} gallery ${i}`));
       await prisma.productImage.create({
         data: {
           productId: product.id,
