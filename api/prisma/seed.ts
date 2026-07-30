@@ -1,5 +1,6 @@
 import {
   DocumentType,
+  Prisma,
   PrismaClient,
   ProductStatus,
   Role,
@@ -345,6 +346,7 @@ async function ensureRichProduct(opts: SeedProductOpts) {
     });
   }
 
+  // Publish audit (Activity feed). Richer brand history is added in seedBrandActivity.
   await prisma.auditLogEntry.create({
     data: {
       organisationId: opts.organisationId,
@@ -352,9 +354,24 @@ async function ensureRichProduct(opts: SeedProductOpts) {
       action: 'PASSPORT_PUBLISHED',
       entityType: 'Product',
       entityId: product.id,
+      createdAt: publishedAt,
       diff: { version: versions, uuid: passport.uuid, seeded: true },
     },
   });
+
+  if (opts.unpublish) {
+    await prisma.auditLogEntry.create({
+      data: {
+        organisationId: opts.organisationId,
+        actorId: opts.ownerId,
+        action: 'PASSPORT_UNPUBLISHED',
+        entityType: 'Product',
+        entityId: product.id,
+        createdAt: new Date(),
+        diff: { seeded: true },
+      },
+    });
+  }
 
   return prisma.product.findFirstOrThrow({
     where: { id: product.id },
@@ -797,6 +814,285 @@ async function seedBrandCatalog(
   return { liveSku };
 }
 
+/**
+ * Seeds a readable Activity timeline (OWNER/MANAGER). Idempotent via
+ * `diff.seededActivity`. Matches the humanised sentences in web/lib/activity.ts
+ * — product names resolve via entityLabel; cert/doc names live in the diff.
+ */
+async function seedBrandActivity(
+  organisationId: string,
+  brand: BrandSeed,
+  team: { ownerId: string; managerId: string; editorId: string },
+) {
+  const already = await prisma.auditLogEntry.findFirst({
+    where: {
+      organisationId,
+      // Prisma JSON filter: only our synthetic Activity pack.
+      diff: { path: ['seededActivity'], equals: true },
+    },
+    select: { id: true },
+  });
+  if (already) return;
+
+  const p = brand.skuPrefix;
+  const bySku = async (sku: string) =>
+    prisma.product.findFirst({
+      where: { organisationId, sku },
+      select: { id: true, name: true, sku: true, deletedAt: true },
+    });
+
+  const incomplete = await bySku(brand.legacyEmails ? 'NTF-4192-BLK' : `${p}-INC-001`);
+  const ready = await bySku(brand.legacyEmails ? 'NTF-READY-001' : `${p}-READY-001`);
+  const liveA = await bySku(brand.legacyEmails ? 'NTF-LIVE-100' : `${p}-LIVE-100`);
+  const liveB = await bySku(brand.legacyEmails ? 'NTF-LIVE-200' : `${p}-LIVE-200`);
+  const archived = await bySku(brand.legacyEmails ? 'NTF-ARCH-200' : `${p}-ARCH-200`);
+  const empty = await bySku(brand.legacyEmails ? 'NTF-EMPTY-400' : `${p}-EMPTY-400`);
+
+  const daysAgo = (days: number, hour = 11) => {
+    const d = new Date();
+    d.setDate(d.getDate() - days);
+    d.setHours(hour, (days * 7) % 60, 0, 0);
+    return d;
+  };
+
+  type Row = {
+    actorId: string;
+    action: string;
+    entityType: string;
+    entityId: string;
+    createdAt: Date;
+    diff?: Record<string, unknown>;
+  };
+
+  const rows: Row[] = [
+    {
+      actorId: team.ownerId,
+      action: 'BRAND_REGISTERED',
+      entityType: 'Organisation',
+      entityId: organisationId,
+      createdAt: daysAgo(40, 9),
+      diff: { seededActivity: true },
+    },
+    {
+      actorId: team.ownerId,
+      action: 'ORGANISATION_UPDATED',
+      entityType: 'Organisation',
+      entityId: organisationId,
+      createdAt: daysAgo(38, 10),
+      diff: {
+        seededActivity: true,
+        changedFields: ['accentColor', 'website'],
+        changed: {
+          accentColor: { from: '#000000', to: brand.accentColor },
+          website: { from: null, to: brand.website },
+        },
+      },
+    },
+    {
+      actorId: team.ownerId,
+      action: 'INVITATION_CREATED',
+      entityType: 'Invitation',
+      entityId: (
+        await prisma.invitation.findFirst({
+          where: { organisationId, acceptedAt: null },
+          select: { id: true },
+        })
+      )?.id ?? organisationId,
+      createdAt: daysAgo(35, 14),
+      diff: { seededActivity: true, email: `invitee@${brand.slug}.test`, role: 'EDITOR' },
+    },
+  ];
+
+  if (incomplete) {
+    rows.push(
+      {
+        actorId: team.editorId,
+        action: 'PRODUCT_CREATED',
+        entityType: 'Product',
+        entityId: incomplete.id,
+        createdAt: daysAgo(28, 10),
+        diff: { seededActivity: true, sku: incomplete.sku },
+      },
+      {
+        actorId: team.editorId,
+        action: 'PRODUCT_UPDATED',
+        entityType: 'Product',
+        entityId: incomplete.id,
+        createdAt: daysAgo(27, 15),
+        diff: {
+          seededActivity: true,
+          changed: {
+            description: {
+              from: 'Draft stub',
+              to: incomplete.name + ' — still missing cover for publish.',
+            },
+          },
+        },
+      },
+    );
+  }
+
+  if (ready) {
+    rows.push(
+      {
+        actorId: team.managerId,
+        action: 'PRODUCT_CREATED',
+        entityType: 'Product',
+        entityId: ready.id,
+        createdAt: daysAgo(20, 9),
+        diff: { seededActivity: true, sku: ready.sku },
+      },
+      {
+        actorId: team.managerId,
+        action: 'IMAGE_ADDED',
+        entityType: 'Product',
+        entityId: ready.id,
+        createdAt: daysAgo(19, 11),
+        diff: { seededActivity: true },
+      },
+      {
+        actorId: team.managerId,
+        action: 'IMAGE_ADDED',
+        entityType: 'Product',
+        entityId: ready.id,
+        // Within the Activity merge window (10m) → "added 2 photos".
+        createdAt: (() => {
+          const d = daysAgo(19, 11);
+          d.setMinutes(d.getMinutes() + 3);
+          return d;
+        })(),
+        diff: { seededActivity: true },
+      },
+      {
+        actorId: team.managerId,
+        action: 'DOCUMENT_ADDED',
+        entityType: 'Product',
+        entityId: ready.id,
+        createdAt: daysAgo(18, 16),
+        diff: { seededActivity: true, fileName: 'user-manual.pdf', type: 'MANUAL' },
+      },
+      {
+        actorId: team.managerId,
+        action: 'CERTIFICATION_ADDED',
+        entityType: 'Product',
+        entityId: ready.id,
+        createdAt: daysAgo(18, 16),
+        diff: { seededActivity: true, name: 'GOTS Organic' },
+      },
+    );
+  }
+
+  if (liveA) {
+    rows.push(
+      {
+        actorId: team.editorId,
+        action: 'PRODUCT_CREATED',
+        entityType: 'Product',
+        entityId: liveA.id,
+        createdAt: daysAgo(16, 10),
+        diff: { seededActivity: true, sku: liveA.sku },
+      },
+      {
+        actorId: team.managerId,
+        action: 'PRODUCT_UPDATED',
+        entityType: 'Product',
+        entityId: liveA.id,
+        createdAt: daysAgo(14, 12),
+        diff: {
+          seededActivity: true,
+          changed: {
+            name: { from: `${liveA.name} (draft)`, to: liveA.name },
+            sku: { from: `${liveA.sku}-TMP`, to: liveA.sku },
+          },
+        },
+      },
+      {
+        actorId: team.ownerId,
+        action: 'COVER_IMAGE_CHANGED',
+        entityType: 'Product',
+        entityId: liveA.id,
+        createdAt: daysAgo(13, 13),
+        diff: { seededActivity: true },
+      },
+      {
+        actorId: team.managerId,
+        action: 'DOCUMENT_ADDED',
+        entityType: 'Product',
+        entityId: liveA.id,
+        createdAt: daysAgo(12, 15),
+        diff: { seededActivity: true, fileName: 'warranty.pdf', type: 'WARRANTY' },
+      },
+      {
+        actorId: team.managerId,
+        action: 'CERTIFICATION_ADDED',
+        entityType: 'Product',
+        entityId: liveA.id,
+        createdAt: daysAgo(12, 15),
+        diff: { seededActivity: true, name: 'GOTS Organic' },
+      },
+      // Publish row already created in ensureRichProduct for live products.
+    );
+  }
+
+  if (liveB) {
+    rows.push({
+      actorId: team.ownerId,
+      action: 'PRODUCT_CREATED',
+      entityType: 'Product',
+      entityId: liveB.id,
+      createdAt: daysAgo(10, 9),
+      diff: { seededActivity: true, sku: liveB.sku },
+    });
+  }
+
+  if (empty) {
+    rows.push({
+      actorId: team.editorId,
+      action: 'PRODUCT_CREATED',
+      entityType: 'Product',
+      entityId: empty.id,
+      createdAt: daysAgo(3, 17),
+      diff: { seededActivity: true, sku: empty.sku },
+    });
+  }
+
+  if (archived) {
+    rows.push(
+      {
+        actorId: team.ownerId,
+        action: 'PRODUCT_CREATED',
+        entityType: 'Product',
+        entityId: archived.id,
+        createdAt: daysAgo(60, 10),
+        diff: { seededActivity: true, sku: archived.sku },
+      },
+      {
+        actorId: team.ownerId,
+        action: 'PRODUCT_ARCHIVED',
+        entityType: 'Product',
+        entityId: archived.id,
+        createdAt: daysAgo(5, 18),
+        diff: { seededActivity: true },
+      },
+    );
+  }
+
+  // Drop rows whose invitation entity was missing.
+  const usable = rows.filter((row) => Boolean(row.entityId));
+
+  await prisma.auditLogEntry.createMany({
+    data: usable.map((row) => ({
+      organisationId,
+      actorId: row.actorId,
+      action: row.action,
+      entityType: row.entityType,
+      entityId: row.entityId,
+      createdAt: row.createdAt,
+      diff: (row.diff ?? { seededActivity: true }) as Prisma.InputJsonValue,
+    })),
+  });
+}
+
 async function main() {
   const passwordHash = await bcrypt.hash(PASSWORD, 12);
 
@@ -816,6 +1112,7 @@ async function main() {
     const org = await ensureOrganisation(brand);
     const team = await seedBrandTeam(org.id, brand, passwordHash);
     const { liveSku } = await seedBrandCatalog(org, brand, team.ownerId);
+    await seedBrandActivity(org.id, brand, team);
 
     const passport = await prisma.passport.findFirst({
       where: { product: { organisationId: org.id, sku: liveSku } },
@@ -907,6 +1204,7 @@ async function main() {
   console.log('Accounts:');
   for (const line of accountLines) console.log(line);
   console.log('Per brand products: incomplete, ready-to-publish, 2× live+scans, unpublished, soft-deleted, empty draft');
+  console.log('Per brand Activity: seeded timeline (create/update/publish/docs/certs/team/brand) for OWNER/MANAGER');
   console.log('Live public passports:');
   for (const line of liveUrls) console.log(line);
 }
