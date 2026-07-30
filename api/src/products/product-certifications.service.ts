@@ -64,6 +64,11 @@ export class ProductCertificationsService {
   async removeCertification(organisationId: string, productId: string, certificationId: string, actorId: string) {
     await this.assertProductOwnership(organisationId, productId);
     await this.prisma.$transaction(async (tx) => {
+      // Captured before the delete so the activity feed can name the certificate.
+      const certification = await tx.certification.findFirst({
+        where: { id: certificationId, productId },
+        select: { name: true },
+      });
       const { count } = await tx.certification.deleteMany({ where: { id: certificationId, productId } });
       if (count === 0) {
         throw new NotFoundException('Certification not found.');
@@ -76,7 +81,7 @@ export class ProductCertificationsService {
           action: 'CERTIFICATION_REMOVED',
           entityType: 'Product',
           entityId: productId,
-          diff: { certificationId },
+          diff: { certificationId, name: certification?.name ?? null },
         },
         tx,
       );
