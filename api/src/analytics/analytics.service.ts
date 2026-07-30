@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { CacheService } from '../cache/cache.service';
+import { CacheKeys } from '../cache/cache.keys';
 
 interface MostViewedRow {
   id: string;
@@ -24,7 +25,7 @@ export class AnalyticsService {
   constructor(private readonly prisma: PrismaService, private readonly cache: CacheService) {}
 
   async dashboard(organisationId: string) {
-    return this.cache.getOrSet(`dashboard:${organisationId}`, 30, () => this.loadDashboard(organisationId));
+    return this.cache.getOrSet(CacheKeys.dashboard(organisationId), 30, () => this.loadDashboard(organisationId));
   }
 
   private async loadDashboard(organisationId: string) {
@@ -65,7 +66,9 @@ export class AnalyticsService {
   }
 
   async overview(organisationId: string, days = 30) {
-    return this.cache.getOrSet(`analytics:${organisationId}:${days}`, 60, () => this.loadOverview(organisationId, days));
+    return this.cache.getOrSet(CacheKeys.analyticsPrefix(organisationId) + String(days), 60, () =>
+      this.loadOverview(organisationId, days),
+    );
   }
 
   private async loadOverview(organisationId: string, days: number) {

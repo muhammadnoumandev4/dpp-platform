@@ -5,6 +5,8 @@ import { UAParser } from 'ua-parser-js';
 import { createHmac } from 'crypto';
 import { Prisma, ScanSource } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
+import { CacheService } from '../cache/cache.service';
+import { CacheKeys } from '../cache/cache.keys';
 import * as geoip from 'geoip-lite';
 
 /** Captured before the HTTP response ends so queued writes never touch a recycled Request. */
@@ -25,6 +27,7 @@ export class ScansService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly cache: CacheService,
   ) {
     // Prefer a dedicated pepper; fall back to JWT_SECRET so existing deploys
     // keep working without a new required env var.
@@ -96,12 +99,35 @@ export class ScansService {
             : null,
         },
       });
+
+      // Dashboard / analytics include scan totals — drop the short TTL caches now
+      // so the back office reflects the new view without waiting for expiry.
+      await this.invalidateOrganisationStats(passportId);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         this.logger.debug(`Ignored duplicate scan for passport=${passportId}`);
         return;
       }
       this.logger.warn(`Failed to record scan for passport=${passportId}: ${(error as Error).message}`);
+    }
+  }
+
+  private async invalidateOrganisationStats(passportId: string) {
+    try {
+      const passport = await this.prisma.passport.findUnique({
+        where: { id: passportId },
+        select: { product: { select: { organisationId: true } } },
+      });
+      const organisationId = passport?.product.organisationId;
+      if (!organisationId) return;
+      await Promise.all([
+        this.cache.deletePrefix(CacheKeys.dashboard(organisationId)),
+        this.cache.deletePrefix(CacheKeys.analyticsPrefix(organisationId)),
+      ]);
+    } catch (error) {
+      this.logger.debug(
+        `Could not invalidate stats after scan passport=${passportId}: ${(error as Error).message}`,
+      );
     }
   }
 

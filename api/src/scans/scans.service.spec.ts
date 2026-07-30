@@ -5,7 +5,10 @@ import { ScansService } from './scans.service';
 describe('ScansService.record', () => {
   const jwtSecret = 'change-me-in-production-please-generate-a-real-secret';
 
-  function buildService(prisma: { scan: { create: jest.Mock } }) {
+  function buildService(prisma: {
+    scan: { create: jest.Mock };
+    passport?: { findUnique: jest.Mock };
+  }) {
     const config = {
       get: (key: string) => {
         if (key === 'JWT_SECRET') return jwtSecret;
@@ -13,7 +16,17 @@ describe('ScansService.record', () => {
         return undefined;
       },
     };
-    return new ScansService(prisma as never, config as never);
+    const cache = {
+      deletePrefix: jest.fn().mockResolvedValue(undefined),
+    };
+    if (!prisma.passport) {
+      prisma.passport = {
+        findUnique: jest.fn().mockResolvedValue({
+          product: { organisationId: 'org-1' },
+        }),
+      };
+    }
+    return new ScansService(prisma as never, config as never, cache as never);
   }
 
   it('uses Express trusted-proxy IP and creates a keyed HMAC dedup key', async () => {

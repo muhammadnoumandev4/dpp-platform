@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma.service';
 import { ProductsService } from '../products/products.service';
 import { QrService } from '../qr/qr.service';
 import { CacheService } from '../cache/cache.service';
+import { CacheKeys } from '../cache/cache.keys';
 import { AuditService } from '../audit/audit.service';
 
 type TxClient = Prisma.TransactionClient;
@@ -255,9 +256,9 @@ export class PassportsService {
     }
 
     await Promise.all([
-      this.cache.delete(`passport:${updatedPassport.uuid}`),
-      this.cache.deletePrefix(`dashboard:${organisationId}`),
-      this.cache.deletePrefix(`analytics:${organisationId}:`),
+      this.cache.delete(CacheKeys.passport(updatedPassport.uuid)),
+      this.cache.deletePrefix(CacheKeys.dashboard(organisationId)),
+      this.cache.deletePrefix(CacheKeys.analyticsPrefix(organisationId)),
     ]);
     return { ...updatedPassport, publicUrl };
   }
@@ -297,9 +298,9 @@ export class PassportsService {
       }, tx);
     });
     await Promise.all([
-      this.cache.delete(`passport:${passport.uuid}`),
-      this.cache.deletePrefix(`dashboard:${organisationId}`),
-      this.cache.deletePrefix(`analytics:${organisationId}:`),
+      this.cache.delete(CacheKeys.passport(passport.uuid)),
+      this.cache.deletePrefix(CacheKeys.dashboard(organisationId)),
+      this.cache.deletePrefix(CacheKeys.analyticsPrefix(organisationId)),
     ]);
     return { success: true };
   }
@@ -311,11 +312,11 @@ export class PassportsService {
    * next explicit publish.
    */
   async getPublicByUuid(uuid: string) {
-    return this.cache.getOrSet(`passport:${uuid}`, 300, () => this.loadPublicByUuid(uuid));
+    return this.cache.getOrSet(CacheKeys.passport(uuid), 300, () => this.loadPublicByUuid(uuid));
   }
 
   async getPublicByItemUuid(itemUuid: string) {
-    const passportUuid = await this.cache.getOrSet(`item-passport:${itemUuid}`, 300, async () => {
+    const passportUuid = await this.cache.getOrSet(CacheKeys.itemPassport(itemUuid), 300, async () => {
       const item = await this.prisma.productItem.findUnique({
         where: { id: itemUuid },
         include: { passport: true },
