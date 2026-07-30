@@ -1,7 +1,8 @@
--- Canonical tenant roles. Platform employees have their own table and JWT
--- strategy, so ADMINISTRATOR must not remain a tenant-role escape hatch.
+-- Canonical roles after unified login: platform employees use Role.ADMIN on
+-- the shared users table (organisationId NULL). Legacy ADMINISTRATOR is folded
+-- into ADMIN.
 UPDATE "users"
-SET "role" = 'EDITOR'
+SET "role" = 'ADMIN'
 WHERE "role" = 'ADMINISTRATOR';
 
 UPDATE "invitations"
@@ -11,7 +12,7 @@ WHERE "role" = 'ADMINISTRATOR';
 ALTER TABLE "users" ALTER COLUMN "role" DROP DEFAULT;
 ALTER TABLE "invitations" ALTER COLUMN "role" DROP DEFAULT;
 ALTER TYPE "Role" RENAME TO "Role_legacy";
-CREATE TYPE "Role" AS ENUM ('OWNER', 'MANAGER', 'EDITOR');
+CREATE TYPE "Role" AS ENUM ('ADMIN', 'OWNER', 'MANAGER', 'EDITOR');
 ALTER TABLE "users"
   ALTER COLUMN "role" TYPE "Role" USING ("role"::text::"Role");
 ALTER TABLE "invitations"

@@ -105,33 +105,41 @@ need `web/.env.local` when running only via `docker compose up --build`.
 
 Password for **all** seed users: **`password123`**
 
-| Email | Role | Opens / purpose |
+### Platform admin
+| Email | Opens |
+|---|---|
+| `admin@notarify.test` | http://localhost:3001/admin — all brands, scans, suspend/reactivate |
+
+### Brands (each has OWNER + MANAGER + EDITOR)
+
+| Brand | OWNER | MANAGER | EDITOR | Notes |
+|---|---|---|---|---|
+| **Notarify** | `editor@notarify.test` | `manager@notarify.test` | `member@notarify.test` | Primary demo brand |
+| **Atlas Goods** | `owner@atlasgoods.test` | `manager@atlasgoods.test` | `editor@atlasgoods.test` | Outdoor |
+| **Lumina Home** | `owner@luminahome.test` | `manager@luminahome.test` | `editor@luminahome.test` | Home |
+| **Verde Beauty** | `owner@verdebeauty.test` | `manager@verdebeauty.test` | `editor@verdebeauty.test` | Beauty |
+| **Harbor Labs** | `owner@harborlabs.test` | `manager@harborlabs.test` | `editor@harborlabs.test` | **Suspended** — test reactivate in admin |
+
+Extra Manager/Editor accounts also exist as `{atl|lum|vrd|hbr}.manager@demo.test` /
+`{atl|lum|vrd|hbr}.editor@demo.test`. Alias `atlas.owner@atlas.test` is an Atlas **MANAGER**
+(each brand can have only one OWNER).
+
+### Per-brand product states (MVP coverage)
+
+Every brand is seeded with the same workflow set (SKU prefix `NTF` / `ATL` / `LUM` / `VRD` / `HBR`):
+
+| State | Example (Notarify) | What to test |
 |---|---|---|
-| `editor@notarify.test` | Brand **OWNER** (Notarify) | http://localhost:3001/ — full brand back office |
-| `manager@notarify.test` | **MANAGER** | Publish allowed; no team/archive/settings |
-| `member@notarify.test` | **EDITOR** | Edit drafts only; cannot publish |
-| `admin@notarify.test` | Platform **ADMIN** | http://localhost:3001/admin |
-| `atlas.owner@atlas.test` | **OWNER** (Atlas Goods) | Second brand for multi-tenant / admin tests |
+| Incomplete draft | `NTF-4192-BLK` | Publish blockers (no cover) |
+| Ready to publish | `NTF-READY-001` | Click **Publish** |
+| Live + analytics | `NTF-LIVE-100`, `*-LIVE-200` | Passport, QR, scans, inventory, versions |
+| Unpublished | `*-OFF-300` | Public URL withdrawn |
+| Soft-deleted | `*-ARCH-200` | Archive behaviour |
+| Minimal draft | `*-EMPTY-400` | Edit flows |
 
-Both brand and admin use the same login form; the app routes by role after sign-in. Despite the
-email prefix, `editor@notarify.test` is the brand **owner**, not an `EDITOR`-role user.
+Also: pending invitations (`invitee@{brand}.test`), certs/docs/gallery on live/ready products.
 
-### Seeded products (Notarify) — what to click
-
-| SKU | State | What to test |
-|---|---|---|
-| `NTF-4192-BLK` | Incomplete draft (no cover) | Publish blockers |
-| `NTF-READY-001` | Complete draft + cover/certs/docs | Click **Publish** |
-| `NTF-LIVE-100` | Published + QR + scans + unit items + 2 versions | Passport, analytics, inventory, version history |
-| `NTF-OFF-300` | Unpublished | Public URL withdrawn |
-| `NTF-ARCH-200` | Soft-deleted | Archive behaviour |
-| `NTF-EMPTY-400` | Minimal draft | Edit flows |
-
-Atlas Goods also has a published `ATL-PARKA-01` for the platform admin console.
-
-After seed, the API log prints the live public passport URL for `NTF-LIVE-100`.
-
-A pending invitation exists for `invitee@notarify.test` (Users → invitations).
+Suggested review path: login `admin@notarify.test` → browse brands → then `editor@notarify.test` for full brand MVP → switch to a Manager/Editor account to confirm permission boundaries.
 
 ---
 

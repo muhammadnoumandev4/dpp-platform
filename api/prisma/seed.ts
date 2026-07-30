@@ -351,118 +351,254 @@ async function ensureRichProduct(opts: SeedProductOpts) {
   });
 }
 
-async function main() {
-  const passwordHash = await bcrypt.hash(PASSWORD, 12);
+type BrandSeed = {
+  slug: string;
+  name: string;
+  accentColor: string;
+  description: string;
+  website: string;
+  country: string;
+  industry: string;
+  suspended?: boolean;
+  /** Keep legacy assessment logins on the primary brand. */
+  legacyEmails?: boolean;
+  skuPrefix: string;
+  categoryNames: [string, string];
+  productNames: {
+    incomplete: string;
+    ready: string;
+    liveA: string;
+    liveB: string;
+    unpublished: string;
+    archived: string;
+    empty: string;
+  };
+};
 
-  const notarify = await prisma.organisation.upsert({
-    where: { publicSlug: 'notarify' },
+const BRANDS: BrandSeed[] = [
+  {
+    slug: 'notarify',
+    name: 'Notarify',
+    accentColor: '#157F5C',
+    description: 'Traceable apparel passports for modern brands.',
+    website: 'https://notarify.test',
+    country: 'Portugal',
+    industry: 'Apparel',
+    legacyEmails: true,
+    skuPrefix: 'NTF',
+    categoryNames: ['Knitwear', 'Footwear'],
+    productNames: {
+      incomplete: 'Merino Crew Knit',
+      ready: 'Linen Overshirt',
+      liveA: 'Trail Runner Low',
+      liveB: 'Merino Beanie',
+      unpublished: 'Seasonal Scarf (unpublished)',
+      archived: 'Archive Cap (soft-deleted)',
+      empty: 'Untitled Draft',
+    },
+  },
+  {
+    slug: 'atlas-goods',
+    name: 'Atlas Goods',
+    accentColor: '#1B4F72',
+    description: 'Outdoor gear with circular supply chains.',
+    website: 'https://atlas-goods.test',
+    country: 'Germany',
+    industry: 'Outdoor',
+    skuPrefix: 'ATL',
+    categoryNames: ['Outerwear', 'Packs'],
+    productNames: {
+      incomplete: 'Shell Jacket (incomplete)',
+      ready: 'Trail Pack 28L',
+      liveA: 'Alpine Parka',
+      liveB: 'Summit Softshell',
+      unpublished: 'Rain Cover (unpublished)',
+      archived: 'Legacy Tent Pegs (archived)',
+      empty: 'New Outerwear Draft',
+    },
+  },
+  {
+    slug: 'lumina-home',
+    name: 'Lumina Home',
+    accentColor: '#8E44AD',
+    description: 'Home textiles with material transparency.',
+    website: 'https://lumina-home.test',
+    country: 'Italy',
+    industry: 'Home',
+    skuPrefix: 'LUM',
+    categoryNames: ['Bedding', 'Tableware'],
+    productNames: {
+      incomplete: 'Linen Duvet (incomplete)',
+      ready: 'Organic Towel Set',
+      liveA: 'Stonewashed Sheet Set',
+      liveB: 'Ceramic Pour-Over',
+      unpublished: 'Seasonal Cushion (unpublished)',
+      archived: 'Old Napkin Set (archived)',
+      empty: 'Home Draft',
+    },
+  },
+  {
+    slug: 'verde-beauty',
+    name: 'Verde Beauty',
+    accentColor: '#27AE60',
+    description: 'Clean beauty with recyclable packaging passports.',
+    website: 'https://verde-beauty.test',
+    country: 'France',
+    industry: 'Beauty',
+    skuPrefix: 'VRD',
+    categoryNames: ['Skincare', 'Haircare'],
+    productNames: {
+      incomplete: 'Serum Bottle (incomplete)',
+      ready: 'Clay Mask Jar',
+      liveA: 'Hydrating Toner',
+      liveB: 'Repair Conditioner',
+      unpublished: 'Travel Kit (unpublished)',
+      archived: 'Discontinued Balm (archived)',
+      empty: 'Formula Draft',
+    },
+  },
+  {
+    slug: 'harbor-labs',
+    name: 'Harbor Labs',
+    accentColor: '#7F8C8D',
+    description: 'Suspended demo brand — use in admin to test reactivate.',
+    website: 'https://harbor-labs.test',
+    country: 'Spain',
+    industry: 'Electronics',
+    suspended: true,
+    skuPrefix: 'HBR',
+    categoryNames: ['Devices', 'Accessories'],
+    productNames: {
+      incomplete: 'Sensor Hub (incomplete)',
+      ready: 'Cable Kit Ready',
+      liveA: 'Beacon Tag',
+      liveB: 'Dock Station',
+      unpublished: 'Pilot SKU (unpublished)',
+      archived: 'Rev A Board (archived)',
+      empty: 'Hardware Draft',
+    },
+  },
+];
+
+async function ensureOrganisation(brand: BrandSeed) {
+  return prisma.organisation.upsert({
+    where: { publicSlug: brand.slug },
     update: {
-      name: 'Notarify',
-      accentColor: '#157F5C',
-      description: 'Traceable apparel passports for modern brands.',
-      contactEmail: 'hello@notarify.test',
-      website: 'https://notarify.test',
-      country: 'Portugal',
-      industry: 'Apparel',
-      disabledAt: null,
+      name: brand.name,
+      accentColor: brand.accentColor,
+      description: brand.description,
+      website: brand.website,
+      country: brand.country,
+      industry: brand.industry,
+      contactEmail: `hello@${brand.slug}.test`,
+      disabledAt: brand.suspended ? new Date('2026-06-01') : null,
     },
     create: {
-      name: 'Notarify',
-      publicSlug: 'notarify',
-      accentColor: '#157F5C',
-      description: 'Traceable apparel passports for modern brands.',
-      contactEmail: 'hello@notarify.test',
-      website: 'https://notarify.test',
-      country: 'Portugal',
-      industry: 'Apparel',
+      name: brand.name,
+      publicSlug: brand.slug,
+      accentColor: brand.accentColor,
+      description: brand.description,
+      website: brand.website,
+      country: brand.country,
+      industry: brand.industry,
+      contactEmail: `hello@${brand.slug}.test`,
+      disabledAt: brand.suspended ? new Date('2026-06-01') : null,
     },
   });
+}
 
-  const atlas = await prisma.organisation.upsert({
-    where: { publicSlug: 'atlas-goods' },
-    update: {
-      name: 'Atlas Goods',
-      accentColor: '#1B4F72',
-      description: 'Outdoor gear with circular supply chains.',
-      website: 'https://atlas-goods.test',
-      country: 'Germany',
-      industry: 'Outdoor',
-      disabledAt: null,
-    },
-    create: {
-      name: 'Atlas Goods',
-      publicSlug: 'atlas-goods',
-      accentColor: '#1B4F72',
-      description: 'Outdoor gear with circular supply chains.',
-      website: 'https://atlas-goods.test',
-      country: 'Germany',
-      industry: 'Outdoor',
-    },
-  });
+async function seedBrandTeam(
+  orgId: string,
+  brand: BrandSeed,
+  passwordHash: string,
+): Promise<{ ownerId: string; managerId: string; editorId: string }> {
+  const domain = `${brand.slug.replace(/-/g, '')}.test`;
+  const ownerEmail = brand.legacyEmails ? 'editor@notarify.test' : `owner@${domain}`;
+  const managerEmail = brand.legacyEmails ? 'manager@notarify.test' : `manager@${domain}`;
+  const editorEmail = brand.legacyEmails ? 'member@notarify.test' : `editor@${domain}`;
 
-  await prisma.$transaction((tx) => provisionOrganisationCatalog(tx, notarify.id));
-  await prisma.$transaction((tx) => provisionOrganisationCatalog(tx, atlas.id));
+  const ownerNames: Record<string, string> = {
+    notarify: 'J. Meyer',
+    'atlas-goods': 'Mara Klein',
+    'lumina-home': 'Giulia Rossi',
+    'verde-beauty': 'Camille Dupont',
+    'harbor-labs': 'Diego Ruiz',
+  };
 
-  const admin = await ensureUser({
-    email: 'admin@notarify.test',
-    name: 'Ana Ferreira',
-    role: Role.ADMIN,
-    passwordHash,
-  });
   const owner = await ensureUser({
-    email: 'editor@notarify.test',
-    name: 'J. Meyer',
+    email: ownerEmail,
+    name: ownerNames[brand.slug] || `${brand.name} Owner`,
     role: Role.OWNER,
-    organisationId: notarify.id,
+    organisationId: orgId,
     passwordHash,
   });
-  await ensureUser({
-    email: 'manager@notarify.test',
-    name: 'Sofia Costa',
+  const manager = await ensureUser({
+    email: managerEmail,
+    name: `${brand.name} Manager`,
     role: Role.MANAGER,
-    organisationId: notarify.id,
+    organisationId: orgId,
     passwordHash,
   });
-  await ensureUser({
-    email: 'member@notarify.test',
-    name: 'Luis Rocha',
+  const editor = await ensureUser({
+    email: editorEmail,
+    name: `${brand.name} Editor`,
     role: Role.EDITOR,
-    organisationId: notarify.id,
-    passwordHash,
-  });
-  await ensureUser({
-    email: 'atlas.owner@atlas.test',
-    name: 'Mara Klein',
-    role: Role.OWNER,
-    organisationId: atlas.id,
+    organisationId: orgId,
     passwordHash,
   });
 
-  const knitwear = await category(notarify.id, 'Knitwear');
-  const footwear = await category(notarify.id, 'Footwear');
-  const portugal = await country(notarify.id, 'PT', 'Portugal');
-  const italy = await country(notarify.id, 'IT', 'Italy');
-  const germany = await country(notarify.id, 'DE', 'Germany');
+  // Extra manager/editor aliases for non-legacy brands (clearer admin directory)
+  if (!brand.legacyEmails) {
+    await ensureUser({
+      email: `${brand.skuPrefix.toLowerCase()}.manager@demo.test`,
+      name: `${brand.name} Manager 2`,
+      role: Role.MANAGER,
+      organisationId: orgId,
+      passwordHash,
+    });
+    await ensureUser({
+      email: `${brand.skuPrefix.toLowerCase()}.editor@demo.test`,
+      name: `${brand.name} Editor 2`,
+      role: Role.EDITOR,
+      organisationId: orgId,
+      passwordHash,
+    });
+  }
 
-  const atlasOuterwear = await category(atlas.id, 'Outerwear');
-  const atlasDe = await country(atlas.id, 'DE', 'Germany');
-  const atlasPt = await country(atlas.id, 'PT', 'Portugal');
+  return { ownerId: owner.id, managerId: manager.id, editorId: editor.id };
+}
 
-  // 1) Incomplete draft — publish blockers (no cover)
+async function seedBrandCatalog(
+  org: { id: string },
+  brand: BrandSeed,
+  ownerId: string,
+): Promise<{ liveSku: string }> {
+  await prisma.$transaction((tx) => provisionOrganisationCatalog(tx, org.id));
+
+  const [catA, catB] = await Promise.all([
+    category(org.id, brand.categoryNames[0]),
+    category(org.id, brand.categoryNames[1]),
+  ]);
+  const pt = await country(org.id, 'PT', 'Portugal');
+  const it = await country(org.id, 'IT', 'Italy');
+  const de = await country(org.id, 'DE', 'Germany');
+  const fr = await country(org.id, 'FR', 'France');
+  const p = brand.skuPrefix;
+
+  // Edge-case / workflow products (MVP coverage)
   await ensureRichProduct({
-    organisationId: notarify.id,
-    ownerId: owner.id,
-    sku: 'NTF-4192-BLK',
-    name: 'Merino Crew Knit',
-    serialNumber: 'SN-0021749',
-    categoryId: knitwear.id,
-    countryId: portugal.id,
-    description:
-      'A mid-weight crew-neck knit in traceable extra-fine merino. Seeded without a cover image so you can test publish blockers.',
+    organisationId: org.id,
+    ownerId,
+    sku: brand.legacyEmails ? 'NTF-4192-BLK' : `${p}-INC-001`,
+    name: brand.productNames.incomplete,
+    serialNumber: `${p}-SN-INC`,
+    categoryId: catA.id,
+    countryId: pt.id,
+    description: `${brand.name}: incomplete draft without cover — test publish blockers.`,
     productionDate: new Date('2026-03-14'),
     materials: [
-      { name: 'Extra-fine merino wool', percentage: 82, countryId: portugal.id, recyclable: true },
-      { name: 'Recycled polyamide', percentage: 18, countryId: italy.id, recyclable: false },
+      { name: 'Primary fibre', percentage: 80, countryId: pt.id, recyclable: true },
+      { name: 'Secondary fibre', percentage: 20, countryId: it.id, recyclable: false },
     ],
     sustainability: {
       carbonFootprintKg: 6.4,
@@ -473,45 +609,43 @@ async function main() {
     },
   });
 
-  // 2) Complete draft — ready to publish in the UI
   await ensureRichProduct({
-    organisationId: notarify.id,
-    ownerId: owner.id,
-    sku: 'NTF-READY-001',
-    name: 'Linen Overshirt',
-    serialNumber: 'SN-READY-001',
-    categoryId: knitwear.id,
-    countryId: portugal.id,
-    description: 'Fully completed draft with cover, materials and sustainability — ready to Publish.',
+    organisationId: org.id,
+    ownerId,
+    sku: brand.legacyEmails ? 'NTF-READY-001' : `${p}-READY-001`,
+    name: brand.productNames.ready,
+    serialNumber: `${p}-SN-READY`,
+    categoryId: catA.id,
+    countryId: pt.id,
+    description: `${brand.name}: complete draft — ready to Publish in the UI.`,
     productionDate: new Date('2026-05-01'),
     withCover: true,
     withGallery: true,
     withCerts: true,
     withDocs: true,
     materials: [
-      { name: 'Organic linen', percentage: 70, countryId: portugal.id, recyclable: true },
-      { name: 'Organic cotton', percentage: 30, countryId: italy.id, recyclable: true },
+      { name: 'Organic material A', percentage: 70, countryId: pt.id, recyclable: true },
+      { name: 'Organic material B', percentage: 30, countryId: it.id, recyclable: true },
     ],
     sustainability: {
       carbonFootprintKg: 4.1,
       waterConsumptionL: 95,
-      recycledPercent: 0,
+      recycledPercent: 10,
       repairabilityScore: 9,
       recyclable: true,
     },
   });
 
-  // 3) Live published passport + analytics + inventory items + version history
-  const live = await ensureRichProduct({
-    organisationId: notarify.id,
-    ownerId: owner.id,
-    sku: 'NTF-LIVE-100',
-    name: 'Trail Runner Low',
-    serialNumber: 'SN-LIVE-100',
-    categoryId: footwear.id,
-    countryId: portugal.id,
-    description:
-      'Published seed product with certifications, documents, gallery, QR, unit items and scan history for analytics.',
+  const liveSku = brand.legacyEmails ? 'NTF-LIVE-100' : `${p}-LIVE-100`;
+  await ensureRichProduct({
+    organisationId: org.id,
+    ownerId,
+    sku: liveSku,
+    name: brand.productNames.liveA,
+    serialNumber: `${p}-SN-LIVE-A`,
+    categoryId: catB.id,
+    countryId: de.id,
+    description: `${brand.name}: flagship published passport with scans, docs, certs, items, versions.`,
     productionDate: new Date('2026-01-20'),
     withCover: true,
     withGallery: true,
@@ -519,12 +653,12 @@ async function main() {
     withDocs: true,
     publish: true,
     versionCount: 2,
-    scanCount: 48,
-    itemCount: 5,
+    scanCount: brand.suspended ? 8 : 36 + (brand.slug.length % 20),
+    itemCount: 4,
     materials: [
-      { name: 'Recycled PET mesh', percentage: 55, countryId: germany.id, recyclable: true },
-      { name: 'Natural rubber', percentage: 35, countryId: portugal.id, recyclable: false },
-      { name: 'Organic cotton lining', percentage: 10, countryId: italy.id, recyclable: true },
+      { name: 'Recycled content', percentage: 55, countryId: de.id, recyclable: true },
+      { name: 'Natural rubber', percentage: 35, countryId: pt.id, recyclable: false },
+      { name: 'Organic lining', percentage: 10, countryId: it.id, recyclable: true },
     ],
     sustainability: {
       carbonFootprintKg: 9.2,
@@ -535,51 +669,52 @@ async function main() {
     },
   });
 
-  // 4) Soft-deleted archive (still listed as deleted / hidden from live lists)
   await ensureRichProduct({
-    organisationId: notarify.id,
-    ownerId: owner.id,
-    sku: 'NTF-ARCH-200',
-    name: 'Archive Cap (soft-deleted)',
-    serialNumber: 'SN-ARCH-200',
-    categoryId: knitwear.id,
-    countryId: italy.id,
-    description: 'Soft-deleted product for testing archive behaviour.',
-    productionDate: new Date('2025-11-01'),
-    deletedAt: new Date('2026-07-01'),
+    organisationId: org.id,
+    ownerId,
+    sku: brand.legacyEmails ? 'NTF-LIVE-200' : `${p}-LIVE-200`,
+    name: brand.productNames.liveB,
+    serialNumber: `${p}-SN-LIVE-B`,
+    categoryId: catA.id,
+    countryId: fr.id,
+    description: `${brand.name}: second live passport for dashboard ranking / most-viewed.`,
+    productionDate: new Date('2026-02-02'),
     withCover: true,
+    withGallery: true,
+    withDocs: true,
+    publish: true,
+    versionCount: 1,
+    scanCount: brand.suspended ? 4 : 22 + (p.charCodeAt(0) % 15),
+    itemCount: 2,
     materials: [
-      { name: 'Organic cotton', percentage: 100, countryId: italy.id, recyclable: true },
+      { name: 'Merino wool', percentage: 100, countryId: pt.id, recyclable: true },
     ],
     sustainability: {
-      carbonFootprintKg: 1.2,
-      waterConsumptionL: 40,
+      carbonFootprintKg: 3.8,
+      waterConsumptionL: 70,
       recycledPercent: 0,
-      repairabilityScore: 6,
+      repairabilityScore: 8,
       recyclable: true,
     },
   });
 
-  // 5) Published then unpublished — public passport withdrawn
   await ensureRichProduct({
-    organisationId: notarify.id,
-    ownerId: owner.id,
-    sku: 'NTF-OFF-300',
-    name: 'Seasonal Scarf (unpublished)',
-    serialNumber: 'SN-OFF-300',
-    categoryId: knitwear.id,
-    countryId: portugal.id,
-    description: 'Was published, then unpublished — public URL should not resolve.',
+    organisationId: org.id,
+    ownerId,
+    sku: brand.legacyEmails ? 'NTF-OFF-300' : `${p}-OFF-300`,
+    name: brand.productNames.unpublished,
+    serialNumber: `${p}-SN-OFF`,
+    categoryId: catA.id,
+    countryId: pt.id,
+    description: `${brand.name}: published then unpublished — public URL withdrawn.`,
     productionDate: new Date('2026-02-10'),
     withCover: true,
     withCerts: true,
     publish: true,
     unpublish: true,
     versionCount: 1,
-    scanCount: 6,
-    materials: [
-      { name: 'Merino wool', percentage: 100, countryId: portugal.id, recyclable: true },
-    ],
+    scanCount: 5,
+    materials: [{ name: 'Merino wool', percentage: 100, countryId: pt.id, recyclable: true }],
     sustainability: {
       carbonFootprintKg: 3.3,
       waterConsumptionL: 80,
@@ -589,20 +724,39 @@ async function main() {
     },
   });
 
-  // 6) Bare draft — empty-ish for create/edit flows
   await ensureRichProduct({
-    organisationId: notarify.id,
-    ownerId: owner.id,
-    sku: 'NTF-EMPTY-400',
-    name: 'Untitled Draft',
-    categoryId: knitwear.id,
-    countryId: portugal.id,
-    description: 'Minimal draft for editing experiments.',
+    organisationId: org.id,
+    ownerId,
+    sku: brand.legacyEmails ? 'NTF-ARCH-200' : `${p}-ARCH-200`,
+    name: brand.productNames.archived,
+    serialNumber: `${p}-SN-ARCH`,
+    categoryId: catA.id,
+    countryId: it.id,
+    description: `${brand.name}: soft-deleted product for archive behaviour.`,
+    productionDate: new Date('2025-11-01'),
+    deletedAt: new Date('2026-07-01'),
+    withCover: true,
+    materials: [{ name: 'Organic cotton', percentage: 100, countryId: it.id, recyclable: true }],
+    sustainability: {
+      carbonFootprintKg: 1.2,
+      waterConsumptionL: 40,
+      recycledPercent: 0,
+      repairabilityScore: 6,
+      recyclable: true,
+    },
+  });
+
+  await ensureRichProduct({
+    organisationId: org.id,
+    ownerId,
+    sku: brand.legacyEmails ? 'NTF-EMPTY-400' : `${p}-EMPTY-400`,
+    name: brand.productNames.empty,
+    serialNumber: `${p}-SN-EMPTY`,
+    categoryId: catA.id,
+    countryId: pt.id,
+    description: `${brand.name}: minimal draft for edit experiments.`,
     productionDate: new Date('2026-07-01'),
-    serialNumber: 'SN-EMPTY-400',
-    materials: [
-      { name: 'Cotton', percentage: 100, countryId: portugal.id, recyclable: true },
-    ],
+    materials: [{ name: 'Cotton', percentage: 100, countryId: pt.id, recyclable: true }],
     sustainability: {
       carbonFootprintKg: 2,
       waterConsumptionL: 50,
@@ -612,96 +766,100 @@ async function main() {
     },
   });
 
-  // Second brand — platform admin multi-tenant console
-  await ensureRichProduct({
-    organisationId: atlas.id,
-    ownerId: (
-      await prisma.user.findUniqueOrThrow({ where: { email: 'atlas.owner@atlas.test' } })
-    ).id,
-    sku: 'ATL-PARKA-01',
-    name: 'Alpine Parka',
-    serialNumber: 'ATL-SN-01',
-    categoryId: atlasOuterwear.id,
-    countryId: atlasDe.id,
-    description: 'Second-brand published product for platform-admin cross-tenant views.',
-    productionDate: new Date('2026-04-12'),
-    withCover: true,
-    withDocs: true,
-    publish: true,
-    versionCount: 1,
-    scanCount: 12,
-    materials: [
-      { name: 'Recycled nylon', percentage: 80, countryId: atlasDe.id, recyclable: true },
-      { name: 'Organic cotton', percentage: 20, countryId: atlasPt.id, recyclable: true },
-    ],
-    sustainability: {
-      carbonFootprintKg: 11.5,
-      waterConsumptionL: 160,
-      recycledPercent: 80,
-      repairabilityScore: 8,
-      recyclable: true,
-    },
-  });
-
+  const inviteEmail = `invitee@${brand.slug}.test`;
   const pendingInvite = await prisma.invitation.findFirst({
-    where: { organisationId: notarify.id, email: 'invitee@notarify.test', acceptedAt: null },
+    where: { organisationId: org.id, email: inviteEmail, acceptedAt: null },
   });
   if (!pendingInvite) {
     await prisma.invitation.create({
       data: {
-        email: 'invitee@notarify.test',
+        email: inviteEmail,
         role: Role.EDITOR,
-        organisationId: notarify.id,
+        organisationId: org.id,
         token: randomUUID(),
-        invitedById: owner.id,
+        invitedById: ownerId,
         expiresAt: new Date(Date.now() + 7 * 86_400_000),
       },
     });
   }
 
-  const seededAudit = await prisma.auditLogEntry.findFirst({
-    where: { action: 'PRODUCT_CREATED', entityId: live.id },
+  return { liveSku };
+}
+
+async function main() {
+  const passwordHash = await bcrypt.hash(PASSWORD, 12);
+
+  const admin = await ensureUser({
+    email: 'admin@notarify.test',
+    name: 'Ana Ferreira',
+    role: Role.ADMIN,
+    passwordHash,
   });
-  if (!seededAudit) {
-    await prisma.auditLogEntry.createMany({
-      data: [
-        {
-          organisationId: notarify.id,
-          actorId: owner.id,
-          action: 'PRODUCT_CREATED',
-          entityType: 'Product',
-          entityId: live.id,
-          diff: { seeded: true },
-        },
-        {
+
+  const liveUrls: string[] = [];
+  const accountLines: string[] = [
+    '  admin@notarify.test              ADMIN     → /admin (all brands)',
+  ];
+
+  for (const brand of BRANDS) {
+    const org = await ensureOrganisation(brand);
+    const team = await seedBrandTeam(org.id, brand, passwordHash);
+    const { liveSku } = await seedBrandCatalog(org, brand, team.ownerId);
+
+    const passport = await prisma.passport.findFirst({
+      where: { product: { organisationId: org.id, sku: liveSku } },
+      select: { uuid: true },
+    });
+    if (passport) {
+      liveUrls.push(`  ${brand.name}: ${WEB_URL}/passport/${passport.uuid}?src=qr`);
+    }
+
+    if (brand.legacyEmails) {
+      accountLines.push('  editor@notarify.test             OWNER     → Notarify');
+      accountLines.push('  manager@notarify.test            MANAGER   → Notarify');
+      accountLines.push('  member@notarify.test             EDITOR    → Notarify');
+    } else {
+      const domain = `${brand.slug.replace(/-/g, '')}.test`;
+      const flag = brand.suspended ? ' (SUSPENDED)' : '';
+      accountLines.push(`  owner@${domain}    OWNER     → ${brand.name}${flag}`);
+      accountLines.push(`  manager@${domain}  MANAGER   → ${brand.name}${flag}`);
+      accountLines.push(`  editor@${domain}   EDITOR    → ${brand.name}${flag}`);
+    }
+
+    const adminAudit = await prisma.auditLogEntry.findFirst({
+      where: { actorId: admin.id, entityId: org.id, action: { in: ['BRAND_SEEDED', 'BRAND_SUSPENDED'] } },
+    });
+    if (!adminAudit) {
+      await prisma.auditLogEntry.create({
+        data: {
           organisationId: null,
           actorId: admin.id,
-          action: 'BRAND_VIEWED',
+          action: brand.suspended ? 'BRAND_SUSPENDED' : 'BRAND_SEEDED',
           entityType: 'Organisation',
-          entityId: notarify.id,
-          diff: { seeded: true },
+          entityId: org.id,
+          diff: { seeded: true, slug: brand.slug },
         },
-      ],
-    });
+      });
+    }
   }
 
-  const livePassport = await prisma.passport.findFirst({
-    where: { product: { sku: 'NTF-LIVE-100' } },
-    select: { uuid: true },
+  // Legacy alias kept for older README snippets — Manager on Atlas (one OWNER max per brand).
+  await ensureUser({
+    email: 'atlas.owner@atlas.test',
+    name: 'Mara Klein (alias)',
+    role: Role.MANAGER,
+    organisationId: (await prisma.organisation.findUniqueOrThrow({ where: { publicSlug: 'atlas-goods' } })).id,
+    passwordHash,
   });
 
-  console.log('Seed complete.');
+  console.log('Seed complete — multi-brand MVP demo data.');
   console.log(`Password for all demo users: ${PASSWORD}`);
+  console.log(`Brands: ${BRANDS.length} (1 suspended for admin reactivate test)`);
   console.log('Accounts:');
-  console.log('  admin@notarify.test     ADMIN     → /admin');
-  console.log('  editor@notarify.test    OWNER     → brand back office');
-  console.log('  manager@notarify.test   MANAGER');
-  console.log('  member@notarify.test    EDITOR');
-  console.log('  atlas.owner@atlas.test  OWNER     → Atlas Goods');
-  console.log('Products (Notarify): incomplete draft, ready-to-publish, live+scans, soft-deleted, unpublished, empty draft');
-  if (livePassport) {
-    console.log(`Live public passport: ${WEB_URL}/passport/${livePassport.uuid}?src=qr`);
-  }
+  for (const line of accountLines) console.log(line);
+  console.log('Per brand products: incomplete, ready-to-publish, 2× live+scans, unpublished, soft-deleted, empty draft');
+  console.log('Live public passports:');
+  for (const line of liveUrls) console.log(line);
 }
 
 main()
