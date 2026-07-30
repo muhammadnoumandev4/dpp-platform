@@ -11,6 +11,9 @@ export const RolePermissions: Record<Role, string[]> = {
   [Role.OWNER]: [
     'brand.read',
     'brand.manage',
+    // Team-wide change history. Deliberately not granted to EDITOR: an editor
+    // works on their own drafts and has no reason to audit colleagues.
+    'audit.read',
     'products.read',
     'products.create',
     'products.update',
@@ -20,6 +23,7 @@ export const RolePermissions: Record<Role, string[]> = {
   ],
   [Role.MANAGER]: [
     'brand.read',
+    'audit.read',
     'products.read',
     'products.create',
     'products.update',
