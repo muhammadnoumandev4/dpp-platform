@@ -136,6 +136,22 @@ history stays intact. Platform-admin actions (`BRAND_SUSPENDED`, `BRAND_REACTIVA
 this same table with `organisationId = NULL`, which is how they are distinguished from tenant
 entries; there is no separate platform audit table.
 
+`GET /audit-log` adds an `entityLabel` to every row — the display name of the product, user,
+invitation or organisation the entry touched — resolved with one batched query per entity type. The
+brand-side Activity page (`/activity`, gated on `audit.read` — held by OWNER and MANAGER only, so an
+editor sees neither the nav item nor the endpoint) renders those rows as plain-language sentences, so any new
+action string should be given wording in `web/lib/activity.ts`; unmapped actions fall back to the
+humanised action name. Diffs written as `{ changed: { field: { from, to } } }` are rendered as
+before → after chips; any other diff key is treated as internal bookkeeping and is not shown. An
+optional `since` query param (ISO-8601) scopes the cursor window by `createdAt`, which is how the
+Activity date-range control paginates correctly instead of filtering only the first loaded page.
+
+`GET /platform-admin/audit-logs` is the cross-tenant view of the same table: server-side paging plus
+`search` / `action` / `organisationId` / `from` / `to` filters, `facets.actions` for the action
+dropdown, and the same `entityLabel` resolution unscoped by organisation. `organisationId=platform`
+selects the entries written with `organisationId = NULL`. The console renders the raw diff verbatim —
+operators need the recorded values, not the plain-language summary the brand side shows.
+
 ## 8. Timestamps
 
 `updatedAt` columns are maintained by Prisma's `@updatedAt` on every write path; the publish flow

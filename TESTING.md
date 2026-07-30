@@ -40,9 +40,9 @@ Seed runs automatically when `RUN_SEED=true` (default in `.env` / Compose).
 
 | Email | Role | Can do |
 |---|---|---|
-| `editor@notarify.test` | **OWNER** | Everything in the brand (products, publish, users, settings, soft-delete) |
-| `manager@notarify.test` | MANAGER | Create/edit/publish — **not** team or archive |
-| `member@notarify.test` | EDITOR | Create/edit drafts — **cannot** publish |
+| `editor@notarify.test` | **OWNER** | Everything in the brand (products, publish, users, settings, soft-delete, Activity) |
+| `manager@notarify.test` | MANAGER | Create/edit/publish + Activity — **not** team or archive |
+| `member@notarify.test` | EDITOR | Create/edit drafts — **cannot** publish, **no** Activity |
 
 ### Other brands (multi-tenant / admin QA)
 
@@ -71,7 +71,8 @@ Each non-Notarify brand also has spare accounts: `{atl\|lum\|vrd\|hbr}.manager@d
 8. **Product Passports** — list published passports; open QR dialog / public link.
 9. Open **`NTF-LIVE-100`** → tabs: Materials, Sustainability, Certifications, Documents, Images, Inventory, Preview, version history after publish.
 10. **Users** — see Manager/Editor; pending invitation for `invitee@notarify.test`.
-11. **Settings** — brand profile (name, accent, website).
+11. **Activity** — team change feed in plain language (search / filters / export). Bonus beyond the six core nav items; replaces the old Settings audit tab.
+12. **Settings** — brand profile (name, accent, website).
 
 ### B. Permission boundaries — ~3 min
 
@@ -130,6 +131,7 @@ Live products include cover/gallery images, certifications PDF, documents, and s
 | QR scan tracking | Open passport with `?src=qr`; check Analytics |
 | Analytics | Brand analytics page + admin platform charts |
 | Users / invitations | Users screen; pending invite |
+| Activity (audit UX) | Sidebar → Activity; publish/edit a product and confirm the sentence appears |
 | Settings | Brand profile fields |
 | Platform admin | `/admin` multi-brand + suspend |
 | Swagger | http://localhost:3000/api/docs |
