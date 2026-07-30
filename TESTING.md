@@ -71,8 +71,8 @@ Each non-Notarify brand also has spare accounts: `{atl\|lum\|vrd\|hbr}.manager@d
 8. **Product Passports** — list published passports; open QR dialog / public link.
 9. Open **`NTF-LIVE-100`** → tabs: Materials, Sustainability, Certifications, Documents, Images, Inventory, Preview, version history after publish.
 10. **Users** — see Manager/Editor; pending invitation for `invitee@notarify.test`.
-11. **Activity** — team change feed in plain language (search / filters / export). Bonus beyond the six core nav items; replaces the old Settings audit tab.
-12. **Settings** — brand profile (name, accent, website).
+11. **Activity** — seeded timeline in plain language (create / update / publish / docs / certs / brand / invite). Try search, person filter, date range, category chips, CSV export. OWNER + MANAGER only (EDITOR has no `audit.read`).
+12. **Settings** — brand profile (name, accent, website). Change accent → public passport logo/accent refresh (passport cache invalidated).
 
 ### B. Permission boundaries — ~3 min
 
@@ -114,6 +114,8 @@ SKU prefixes: `NTF` · `ATL` · `LUM` · `VRD` · `HBR`
 
 Live products include cover/gallery images, certifications PDF, documents, and scan history for analytics.
 
+Each brand also gets a **seeded Activity timeline** (idempotent on re-seed) so `/activity` is populated before you click around: product create/update, image bursts, documents, certifications, brand profile change, invitation, archive, plus publish/unpublish from the catalog seed.
+
 ---
 
 ## 5. Feature coverage map
@@ -131,8 +133,9 @@ Live products include cover/gallery images, certifications PDF, documents, and s
 | QR scan tracking | Open passport with `?src=qr`; check Analytics |
 | Analytics | Brand analytics page + admin platform charts |
 | Users / invitations | Users screen; pending invite |
-| Activity (audit UX) | Sidebar → Activity; publish/edit a product and confirm the sentence appears |
-| Settings | Brand profile fields |
+| Activity (audit UX) | Sidebar → Activity as OWNER/MANAGER. Expect seeded sentences naming products (e.g. Trail Runner / Linen Overshirt), “added 2 photos”, cert/doc names, brand colour change chips. EDITOR: no Activity nav. |
+| Settings | Brand profile fields; after save, reopen a live public passport — branding should match |
+| Redis / cache | `GET /health` → `cache: "redis"` in Compose. Dashboard/analytics refresh after a QR scan without waiting for TTL. |
 | Platform admin | `/admin` multi-brand + suspend |
 | Swagger | http://localhost:3000/api/docs |
 | Docker | Single `docker compose up --build` |
@@ -181,4 +184,6 @@ If you discuss the submission with the candidate (or evaluate docs):
 - **Stable UUID/QR** across republish
 - **Tenant isolation** — `organisationId` on data + permission guards
 - **Soft-delete vs Unpublish** — archive ≠ withdraw public access
+- **Activity / audit** — humanised feed over `audit_log_entries`; `entityLabel` resolved server-side; EDITOR cannot read
+- **Redis** — dashboard/analytics/passport cache + shared scan job list; memory fallback if `REDIS_URL` unset
 - Docs: [README.md](./README.md), [ARCHITECTURE.md](./ARCHITECTURE.md), [docs/DATA-MODEL.md](./docs/DATA-MODEL.md)

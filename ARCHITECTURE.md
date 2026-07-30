@@ -32,7 +32,8 @@ The platform is two applications sharing one PostgreSQL database, deployed with 
   shared `PassportView` component.
 - **Postgres** — the single source of truth, with integrity invariants pushed into the schema
   (CHECK constraints, partial unique indexes, composite tenant foreign keys).
-- **Redis** — a cache for dashboard/analytics aggregates with automatic in-memory fallback, so the
+- **Redis** — shared cache for dashboard/analytics aggregates and public passport payloads, plus a
+  Redis list for the scan write queue across API replicas, with automatic in-memory fallback so the
   stack degrades gracefully when Redis is absent.
 
 ### Request flows
@@ -157,18 +158,19 @@ Key integrity mechanisms, enforced in PostgreSQL rather than only in application
   indexed lookup — and are the natural candidate for CDN/edge caching, since a snapshot changes
   only on republish.
 - **Aggregate caching.** Dashboard and analytics totals are cached with explicit invalidation on
-  mutation, keeping hot pages off the database. Heavy scan analytics use SQL aggregation
-  (`GROUP BY` top-N) rather than in-process computation.
+  product mutation, publish/unpublish, **and each recorded scan**, so back-office counters do not
+  wait for TTL. Public passport payloads are cached separately and invalidated on publish,
+  unpublish, and brand-profile updates (name / logo / accent are live-joined into the response).
 - **Pagination everywhere.** Product lists and admin views are offset-paginated with capped page
   sizes; full-text search is index-backed.
 - **Storage abstraction.** The upload layer targets an object-storage interface; swapping local
   disk for S3-compatible storage is an adapter change, not a refactor.
-- **Scan write offload.** Public reads enqueue scan persistence on a bounded in-process queue
-  (`ScanQueueService`) so snapshot latency is independent of DB write time. At higher volume the
-  same enqueue call site can target BullMQ/Redis without changing controllers.
+- **Scan write offload.** Public reads enqueue a serialisable scan payload on a Redis list
+  (`dpp:scan-jobs`) shared by API replicas, with an in-process bounded deque as fallback when
+  Redis is unset or unreachable. Controllers never await the DB write.
 - **Health probes.** `GET /health` checks Postgres + Redis (or memory-cache fallback) and reports
-  scan-queue depth for orchestrators.
-- **Growth path.** Next steps at scale: durable Redis/BullMQ for the scan queue across replicas,
+  combined scan-queue depth for orchestrators.
+- **Growth path.** Next steps at scale: BullMQ (retries/DLQ) if the Redis list is not enough,
   analytics rollup tables or a columnar store, partitioning `scans` by time, and extracting the
   public read path into its own deployment if traffic profiles diverge.
 

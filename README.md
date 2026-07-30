@@ -138,6 +138,9 @@ Every brand is seeded with the same workflow set (SKU prefix `NTF` / `ATL` / `LU
 | Soft-deleted | `*-ARCH-200` | Archive behaviour |
 | Minimal draft | `*-EMPTY-400` | Edit flows |
 
+Plus a **seeded Activity timeline** per brand (create/update/docs/certs/brand/invite/archive) so
+`/activity` is reviewable immediately as OWNER or MANAGER.
+
 Also: pending invitations (`invitee@{brand}.test`), certs/docs/gallery on live/ready products.
 
 Suggested review path: follow **[TESTING.md](./TESTING.md)** (20-minute checklist: brand MVP →
@@ -301,9 +304,13 @@ Optional Playwright (needs running web+api): `npm --prefix web run test:e2e`.
 
 ## Bonus features included
 
-Full-text product search, passport versioning, soft delete, audit log, Redis caching, pagination /
-filters, passport PDF export, drag-and-drop uploads with server magic-byte checks, unit tests, CI
-(`.github/workflows/ci.yml`).
+Full-text product search, passport versioning, soft delete, **Activity** feed (humanised audit log
+with date-scoped pagination), Redis caching (dashboard / analytics / public passport + Redis scan
+queue with memory fallback), pagination / filters, passport PDF export, drag-and-drop
+uploads with server magic-byte checks, unit tests, CI (`.github/workflows/ci.yml`).
+
+The assessment nav (Dashboard, Products, Product Passports, Analytics, Users, Settings) is present;
+**Activity** is an extra sidebar item for the audit UX.
 
 ---
 
