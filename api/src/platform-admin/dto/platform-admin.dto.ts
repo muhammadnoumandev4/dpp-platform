@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsEmail, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsDateString, IsEmail, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export class PlatformAdminLoginDto {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
@@ -52,6 +52,28 @@ export class PlatformListQueryDto {
   @Min(1)
   @Max(100)
   limit = 25;
+}
+
+export class AuditLogQueryDto extends PlatformListQueryDto {
+  /** Exact `action` string, as offered by the response's `facets.actions`. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  action?: string;
+
+  /** A tenant id, or the literal `platform` for entries with no organisation. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  organisationId?: string;
+
+  @IsOptional()
+  @IsDateString()
+  from?: string;
+
+  @IsOptional()
+  @IsDateString()
+  to?: string;
 }
 
 export class SetBrandStatusDto {

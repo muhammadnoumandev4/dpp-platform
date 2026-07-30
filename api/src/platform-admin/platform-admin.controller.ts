@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { ListBrandsQueryDto, PlatformListQueryDto, SetBrandStatusDto } from './dto/platform-admin.dto';
+import { AuditLogQueryDto, ListBrandsQueryDto, PlatformListQueryDto, SetBrandStatusDto } from './dto/platform-admin.dto';
 import { PlatformAdminService } from './platform-admin.service';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { RequirePermission } from '../auth/permissions.decorator';
@@ -70,7 +70,7 @@ export class PlatformAdminController {
   @Get('audit-logs')
   @RequirePermission('platform.read')
   @ApiOperation({ summary: 'Platform-wide audit log history' })
-  listAuditLogs(@Query() query: PlatformListQueryDto) {
-    return this.platformAdmin.listAuditLogs(query.page, query.limit);
+  listAuditLogs(@Query() query: AuditLogQueryDto) {
+    return this.platformAdmin.listAuditLogs(query);
   }
 }

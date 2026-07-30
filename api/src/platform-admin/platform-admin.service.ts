@@ -1,11 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
-import { ListBrandsQueryDto } from './dto/platform-admin.dto';
+import { AuditLogQueryDto, ListBrandsQueryDto } from './dto/platform-admin.dto';
+import { AuditService } from '../audit/audit.service';
+
+/** Sentinel used by the console to ask for entries with no organisation. */
+export const PLATFORM_SCOPE = 'platform';
 
 @Injectable()
 export class PlatformAdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async overview() {
     const [brands, activeBrands, brandUsers, products, publishedPassports, scans] = await Promise.all([
@@ -356,10 +363,36 @@ export class PlatformAdminService {
     };
   }
 
-  async listAuditLogs(page = 1, limit = 25) {
-    const [logs, total] = await Promise.all([
+  async listAuditLogs(query: AuditLogQueryDto) {
+    const { page = 1, limit = 25, search, action, organisationId, from, to } = query;
+
+    const createdAt: Prisma.DateTimeFilter = {};
+    if (from) createdAt.gte = new Date(from);
+    // `to` is a calendar day from a date input; include everything up to its end.
+    if (to) createdAt.lte = new Date(new Date(to).setHours(23, 59, 59, 999));
+
+    const where: Prisma.AuditLogEntryWhereInput = {
+      ...(action ? { action } : {}),
+      ...(organisationId
+        ? { organisationId: organisationId === PLATFORM_SCOPE ? null : organisationId }
+        : {}),
+      ...(from || to ? { createdAt } : {}),
+      ...(search
+        ? {
+            OR: [
+              { entityId: { contains: search, mode: 'insensitive' } },
+              { actor: { name: { contains: search, mode: 'insensitive' } } },
+              { actor: { email: { contains: search, mode: 'insensitive' } } },
+              { organisation: { name: { contains: search, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+    };
+
+    const [logs, total, actionFacets] = await Promise.all([
       this.prisma.auditLogEntry.findMany({
-        orderBy: { createdAt: 'desc' },
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip: (page - 1) * limit,
         take: limit,
         include: {
@@ -367,15 +400,29 @@ export class PlatformAdminService {
           organisation: { select: { name: true } },
         },
       }),
-      this.prisma.auditLogEntry.count(),
+      this.prisma.auditLogEntry.count({ where }),
+      // Facets ignore the action filter itself so the dropdown never empties out.
+      this.prisma.auditLogEntry.groupBy({
+        by: ['action'],
+        _count: { action: true },
+        orderBy: { action: 'asc' },
+      }),
     ]);
 
+    const labels = await this.audit.resolveEntityLabels(undefined, logs);
+
     return {
-      rows: logs,
+      rows: logs.map((log) => ({
+        ...log,
+        entityLabel: labels.get(`${log.entityType}:${log.entityId}`) ?? null,
+      })),
       page,
       limit,
       total,
       pages: Math.max(1, Math.ceil(total / limit)),
+      facets: {
+        actions: actionFacets.map((facet) => ({ action: facet.action, count: facet._count.action })),
+      },
     };
   }
 }
