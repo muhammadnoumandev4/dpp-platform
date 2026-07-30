@@ -109,8 +109,12 @@ export class PublicPassportController {
     scanSource?: string,
   ) {
     const snapshot = this.scansService.snapshotFromRequest(request);
-    this.scanQueue.enqueue(() =>
-      this.scansService.recordSnapshot(passportId, snapshot, scanId, productItemId, scanSource),
-    );
+    this.scanQueue.enqueue({
+      passportId,
+      snapshot,
+      scanId,
+      productItemId,
+      source: scanSource,
+    });
   }
 }

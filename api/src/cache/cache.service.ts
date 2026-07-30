@@ -91,6 +91,43 @@ export class CacheService implements OnModuleDestroy {
     return 'redis';
   }
 
+  /** True when a Redis client is configured (may still be temporarily unreachable). */
+  isRedisConfigured(): boolean {
+    return Boolean(this.redis);
+  }
+
+  /**
+   * Durable job list helpers for the scan queue. Return false / null on any Redis
+   * failure so callers can fall back to the in-process queue without throwing.
+   */
+  async listPush(listKey: string, value: string): Promise<boolean> {
+    try {
+      if (!this.redis) return false;
+      await this.ensureRedis().then((redis) => redis.lpush(this.redisKey(listKey), value));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async listPop(listKey: string): Promise<string | null> {
+    try {
+      if (!this.redis) return null;
+      return await this.ensureRedis().then((redis) => redis.rpop(this.redisKey(listKey)));
+    } catch {
+      return null;
+    }
+  }
+
+  async listLength(listKey: string): Promise<number> {
+    try {
+      if (!this.redis) return 0;
+      return await this.ensureRedis().then((redis) => redis.llen(this.redisKey(listKey)));
+    } catch {
+      return 0;
+    }
+  }
+
   async onModuleDestroy() {
     if (this.redis?.status === 'ready') await this.redis.quit();
     else this.redis?.disconnect();

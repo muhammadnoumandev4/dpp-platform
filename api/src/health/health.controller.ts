@@ -21,7 +21,7 @@ export class HealthController {
       return {
         status: 'ok',
         cache,
-        scanQueueDepth: this.scanQueue.depth(),
+        scanQueueDepth: await this.scanQueue.depth(),
         uptimeSeconds: Math.floor(process.uptime()),
       };
     } catch (error) {
