@@ -16,11 +16,20 @@ verification**. Longer design notes live in [ARCHITECTURE.md](./ARCHITECTURE.md)
 
 **Prerequisite:** Docker Desktop (or Docker Engine + Compose v2).
 
+The professional way is to put secrets in a root `.env` file (Compose loads it automatically),
+then start the stack:
+
 ```bash
 git clone https://github.com/muhammadnoumandev4/dpp-platform.git
 cd dpp-platform
-JWT_SECRET=$(openssl rand -base64 48) docker compose up --build
+cp .env.example .env
+# Generate a secret (≥32 chars) and paste it as JWT_SECRET in `.env`:
+openssl rand -base64 48
+# edit .env → JWT_SECRET=<paste>
+docker compose up --build
 ```
+
+`RUN_SEED=true` in `.env` seeds demo users on API start (safe default for review).
 
 Wait until `api` and `web` are healthy, then open:
 
@@ -33,11 +42,62 @@ Wait until `api` and `web` are healthy, then open:
 | Brand signup | http://localhost:3001/signup |
 
 On first boot Compose starts Postgres + Redis + API + Web, applies Prisma migrations, and runs the
-idempotent seed (`RUN_SEED=true` by default). After a successful first seed on a persistent volume,
-you can set `RUN_SEED=false` for later restarts.
+idempotent seed when `RUN_SEED=true`. After a successful first seed on a persistent volume, set
+`RUN_SEED=false` in `.env` for later restarts.
 
 Stop with `Ctrl+C`, or `docker compose down`. Data volumes persist; wipe with
 `docker compose down -v`.
+
+---
+
+## Environment variables
+
+Examples are committed; real secret files are gitignored.
+
+| File | Used for | Copy to |
+|---|---|---|
+| [`.env.example`](./.env.example) | Docker Compose (`JWT_SECRET`, `RUN_SEED`) | repo-root `.env` |
+| [`api/.env.example`](./api/.env.example) | Local NestJS (`npm run start:dev`) | `api/.env` |
+| [`web/.env.local.example`](./web/.env.local.example) | Local Next.js (`npm run dev`) | `web/.env.local` |
+
+### Root `.env` (Docker Compose) — required to run via Compose
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `JWT_SECRET` | **Yes** (≥32 chars) | Signs auth cookies/tokens. Generate with `openssl rand -base64 48`. |
+| `RUN_SEED` | No (default `true`) | Run Prisma seed on API container start. |
+
+Compose already wires DB/Redis/URLs inside `docker-compose.yml` for the containers. You normally
+only set the two variables above in the root `.env`.
+
+### Backend `api/.env` — local API without full Compose app containers
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `DATABASE_URL` | **Yes** | Postgres connection. With Compose Postgres: `postgresql://dpp:dpp@localhost:5433/dpp` |
+| `JWT_SECRET` | **Yes** (≥32 chars) | Same as above |
+| `PORT` | No | API port (default `3000`) |
+| `UPLOAD_DIR` | No | Local upload directory (default `./uploads`) |
+| `PUBLIC_BASE_URL` | No | Public API base (QR/PDF links) |
+| `WEB_PUBLIC_URL` | No | Web app origin |
+| `CORS_ORIGIN` | No | Allowed browser origin |
+| `COOKIE_SECURE` | No | `true` only behind HTTPS |
+| `TRUST_PROXY` | No | Set when behind a trusted reverse proxy |
+| `SCAN_COUNTRY_FALLBACK` | No | Fallback country code for scans |
+| `SCAN_IP_PEPPER` | No | Optional HMAC pepper (else `JWT_SECRET`) |
+| `REDIS_URL` | No | Redis URL; empty → in-memory cache |
+| `REDIS_KEY_PREFIX` | No | Key namespace (default `dpp:`) |
+| `CACHE_MAX_MEMORY_ENTRIES` | No | In-memory cache cap |
+
+### Frontend `web/.env.local` — local Next.js
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | **Yes** (for browser) | API origin seen by the browser (`http://localhost:3000`) |
+| `INTERNAL_API_URL` | No | SSR server-side fetch origin. In Docker Compose this is `http://api:3000`; for local `next dev` leave unset or same as `NEXT_PUBLIC_API_URL`. |
+
+Docker Compose sets web env for you (`NEXT_PUBLIC_API_URL`, `INTERNAL_API_URL`) — you do **not**
+need `web/.env.local` when running only via `docker compose up --build`.
 
 ---
 
@@ -105,8 +165,7 @@ docker compose up -d postgres redis
 
 cd api
 cp .env.example .env
-# Set DATABASE_URL to postgresql://dpp:dpp@localhost:5433/dpp
-# Set JWT_SECRET to a string ≥ 32 characters
+# Set JWT_SECRET in api/.env (≥32 chars): openssl rand -base64 48
 npm install
 npx prisma migrate deploy
 npm run db:seed
@@ -117,7 +176,7 @@ npm run start:dev
 
 ```bash
 cd web
-cp .env.example .env   # NEXT_PUBLIC_API_URL=http://localhost:3000
+cp .env.local.example .env.local
 npm install
 npm run dev            # http://localhost:3001
 ```
