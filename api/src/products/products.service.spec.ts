@@ -48,7 +48,13 @@ const BASE_PRODUCT = {
   productionDate: new Date(),
   countryOfOriginId: 'country-1',
   materials: [{ percentage: 100 }],
-  sustainability: { carbonFootprintKg: 6.4 },
+  sustainability: {
+    carbonFootprintKg: 6.4,
+    waterConsumptionL: 142,
+    recycledPercent: 18,
+    repairabilityScore: 8,
+    recyclable: true,
+  },
   images: [{ isCover: true }],
 };
 
@@ -87,6 +93,30 @@ describe('ProductsService.getPublishBlockers', () => {
 
     const blockers = await service.getPublishBlockers('org-1', 'product-1');
     expect(blockers).toContainEqual(expect.objectContaining({ code: 'MATERIAL_TOTAL', path: 'materials' }));
+  });
+
+  it('flags incomplete sustainability fields', async () => {
+    const prisma = buildPrismaMock();
+    prisma.product.findFirst.mockResolvedValue({
+      ...BASE_PRODUCT,
+      sustainability: {
+        carbonFootprintKg: 6.4,
+        waterConsumptionL: null,
+        recycledPercent: null,
+        repairabilityScore: null,
+        recyclable: false,
+      },
+    });
+    const service = buildService(prisma);
+
+    const blockers = await service.getPublishBlockers('org-1', 'product-1');
+    expect(blockers.map((b) => b.code)).toEqual(
+      expect.arrayContaining([
+        'WATER_CONSUMPTION_MISSING',
+        'RECYCLED_PERCENT_MISSING',
+        'REPAIRABILITY_SCORE_MISSING',
+      ]),
+    );
   });
 
   it('throws NotFoundException for a product outside the caller organisation', async () => {

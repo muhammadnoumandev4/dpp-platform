@@ -55,9 +55,18 @@ export function SustainabilityTab({ product, onSaved }: { product: FullProduct; 
     }
   }
 
+  const sustainabilityComplete =
+    fields.carbonFootprintKg !== '' &&
+    fields.waterConsumptionL !== '' &&
+    fields.recycledPercent !== '' &&
+    fields.repairabilityScore !== '';
+
   return (
     <Paper variant="outlined" sx={{ p: 3 }}>
       <Typography variant="h3" sx={{ mb: 2 }}>Sustainability</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        All fields are required before a product can be published.
+      </Typography>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       <Grid container spacing={2}>
         <Grid item xs={12} sm={6}>
@@ -74,6 +83,7 @@ export function SustainabilityTab({ product, onSaved }: { product: FullProduct; 
         <Grid item xs={12} sm={6}>
           <TextField
             label="Water consumption"
+            required
             type="number"
             fullWidth
             InputProps={{ endAdornment: <InputAdornment position="end">L</InputAdornment> }}
@@ -84,6 +94,7 @@ export function SustainabilityTab({ product, onSaved }: { product: FullProduct; 
         <Grid item xs={12} sm={6}>
           <TextField
             label="Recycled material"
+            required
             type="number"
             fullWidth
             inputProps={{ min: 0, max: 100 }}
@@ -95,6 +106,7 @@ export function SustainabilityTab({ product, onSaved }: { product: FullProduct; 
         <Grid item xs={12} sm={6}>
           <TextField
             label="Repairability score"
+            required
             type="number"
             fullWidth
             inputProps={{ min: 1, max: 10 }}
@@ -114,7 +126,7 @@ export function SustainabilityTab({ product, onSaved }: { product: FullProduct; 
       <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
         <Button 
           variant="contained" 
-          disabled={!isDirty || saving || fields.carbonFootprintKg === ''} 
+          disabled={!isDirty || saving || !sustainabilityComplete} 
           onClick={save}
         >
           {saving ? 'Saving...' : 'Save Sustainability Info'}

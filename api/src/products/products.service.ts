@@ -32,7 +32,13 @@ interface PublishableProduct {
   productionDate: Date | null;
   countryOfOriginId: string | null;
   materials: Array<{ percentage: number }>;
-  sustainability: { carbonFootprintKg: number | null } | null;
+  sustainability: {
+    carbonFootprintKg: number | null;
+    waterConsumptionL: number | null;
+    recycledPercent: number | null;
+    repairabilityScore: number | null;
+    recyclable: boolean | null;
+  } | null;
   images: Array<{ isCover: boolean }>;
 }
 
@@ -371,8 +377,41 @@ export class ProductsService {
         message: `Material percentages must total 100%. Currently ${materialTotal.toFixed(0)}%.`,
       });
     }
-    if (product.sustainability?.carbonFootprintKg == null) {
-      blockers.push({ code: 'CARBON_FOOTPRINT_MISSING', path: 'sustainability', message: 'Carbon footprint is required.' });
+    if (!product.sustainability) {
+      blockers.push({
+        code: 'SUSTAINABILITY_MISSING',
+        path: 'sustainability',
+        message: 'Sustainability information is required.',
+      });
+    } else {
+      if (product.sustainability.carbonFootprintKg == null) {
+        blockers.push({
+          code: 'CARBON_FOOTPRINT_MISSING',
+          path: 'sustainability',
+          message: 'Carbon footprint is required.',
+        });
+      }
+      if (product.sustainability.waterConsumptionL == null) {
+        blockers.push({
+          code: 'WATER_CONSUMPTION_MISSING',
+          path: 'sustainability',
+          message: 'Water consumption is required.',
+        });
+      }
+      if (product.sustainability.recycledPercent == null) {
+        blockers.push({
+          code: 'RECYCLED_PERCENT_MISSING',
+          path: 'sustainability',
+          message: 'Recycled material percentage is required.',
+        });
+      }
+      if (product.sustainability.repairabilityScore == null) {
+        blockers.push({
+          code: 'REPAIRABILITY_SCORE_MISSING',
+          path: 'sustainability',
+          message: 'Repairability score is required.',
+        });
+      }
     }
 
     return blockers;
