@@ -23,7 +23,8 @@ export const tokens = {
     },
     success: { main: '#157F5C', bg: '#E8F1ED', border: '#C9E0D6' },
     warning: { main: '#9A6B0F', bg: '#FBF6EA', border: '#EADFC2' },
-    error: { main: '#A32B2B', bg: '#FBF1F1', border: '#E8CFCF' },
+    // `tint` is the faintest wash of the status colour, for whole-row backgrounds.
+    error: { main: '#A32B2B', bg: '#FBF1F1', border: '#E8CFCF', tint: '#FFFBFB' },
     info: { main: '#2A5C86', bg: '#F1F6FA', border: '#CEDCE8' },
     chart: ['#14654A', '#7FB49E', '#2A5C86', '#9A6B0F', '#6B5B8A'],
   },

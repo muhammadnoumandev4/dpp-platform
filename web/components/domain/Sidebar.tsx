@@ -15,6 +15,7 @@ import DashboardIcon from '@mui/icons-material/DashboardOutlined';
 import Inventory2Icon from '@mui/icons-material/Inventory2Outlined';
 import BadgeIcon from '@mui/icons-material/BadgeOutlined';
 import InsightsIcon from '@mui/icons-material/InsightsOutlined';
+import HistoryIcon from '@mui/icons-material/HistoryOutlined';
 import GroupIcon from '@mui/icons-material/GroupOutlined';
 import SettingsIcon from '@mui/icons-material/SettingsOutlined';
 import { api } from '@/lib/api/client';
@@ -28,6 +29,9 @@ const MANAGE_ITEMS = [
   { label: 'Product Passports', href: '/passports', icon: BadgeIcon },
   { label: 'Analytics', href: '/analytics', icon: InsightsIcon },
 ];
+
+// Owner and Manager only — matches the audit.read guard on /audit-log.
+const ACTIVITY_ITEM = { label: 'Activity', href: '/activity', icon: HistoryIcon };
 
 export function SidebarContent({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
@@ -45,6 +49,11 @@ export function SidebarContent({ onClose }: { onClose?: () => void }) {
   }, []);
 
   const { hasPermission } = usePermissions();
+
+  const manageItems = [
+    ...MANAGE_ITEMS,
+    ...(hasPermission('audit.read') ? [ACTIVITY_ITEM] : []),
+  ];
 
   const adminItems = [
     ...(hasPermission('users.manage')
@@ -115,7 +124,7 @@ export function SidebarContent({ onClose }: { onClose?: () => void }) {
       </Box>
 
       <Typography variant="overline" color="text.secondary" sx={{ px: 2, mt: 1 }}>Manage</Typography>
-      <List sx={{ py: 0.5 }}>{MANAGE_ITEMS.map(renderItem)}</List>
+      <List sx={{ py: 0.5 }}>{manageItems.map(renderItem)}</List>
 
       {adminItems.length > 0 && (
         <>

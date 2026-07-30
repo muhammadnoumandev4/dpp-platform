@@ -9,8 +9,6 @@ import {
   Divider,
   MenuItem,
   Paper,
-  Tab,
-  Tabs,
   TextField,
   Typography,
 } from '@mui/material';
@@ -32,87 +30,6 @@ interface Organisation {
   website: string | null;
   country: string | null;
   industry: string | null;
-}
-
-interface AuditEntry {
-  id: string;
-  action: string;
-  entityType: string;
-  entityId: string;
-  diff: Record<string, unknown> | null;
-  createdAt: string;
-  actor: { name: string; email: string };
-}
-
-function AuditLogTab() {
-  const [rows, setRows] = useState<AuditEntry[] | null>(null);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function load(cursor?: string) {
-    setError(null);
-    try {
-      const result = await api.get<{ rows: AuditEntry[]; nextCursor: string | null }>(
-        `/audit-log?limit=25${cursor ? `&cursor=${cursor}` : ''}`,
-      );
-      setRows((current) => cursor && current ? [...current, ...result.rows] : result.rows);
-      setNextCursor(result.nextCursor);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not load the audit log.');
-    }
-  }
-
-  useEffect(() => { load(); }, []);
-
-  if (error && !rows) return <Alert severity="error">{error}</Alert>;
-  if (!rows) return <CircularProgress size={24} />;
-
-  return (
-    <Paper variant="outlined" sx={{ p: 3 }}>
-      <Typography variant="h3" sx={{ mb: 2 }}>Audit log</Typography>
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {rows.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">No recorded changes yet.</Typography>
-      ) : rows.map((entry) => (
-        <Box key={entry.id} sx={{ py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
-          <Typography variant="body2">
-            <strong>{entry.actor.name}</strong> {entry.action.toLowerCase().replaceAll('_', ' ')}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {entry.entityType} · {new Date(entry.createdAt).toLocaleString()}
-          </Typography>
-          {entry.diff && typeof entry.diff === 'object' && (
-            <Box component="details" sx={{ mt: 0.5 }}>
-              <Typography component="summary" variant="caption" sx={{ cursor: 'pointer', color: 'primary.main', '&:hover': { textDecoration: 'underline' } }}>
-                View change details
-              </Typography>
-              <Box sx={{ mt: 1, p: 1.5, bgcolor: 'grey.50', borderRadius: 1, border: '1px solid', borderColor: 'grey.200' }}>
-                {Object.entries(entry.diff).map(([key, value]) => {
-                  let displayValue = String(value);
-                  if (value === null || value === undefined) displayValue = 'None';
-                  else if (typeof value === 'boolean') displayValue = value ? 'Yes' : 'No';
-                  else if (Array.isArray(value)) displayValue = value.join(', ');
-                  else if (typeof value === 'object') displayValue = 'Updated';
-
-                  return (
-                    <Box key={key} sx={{ display: 'flex', gap: 2, mb: 0.5, fontSize: 12, alignItems: 'center' }}>
-                      <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', minWidth: 120 }}>
-                        {key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase())}
-                      </Typography>
-                      <Typography variant="caption" sx={{ bgcolor: 'white', px: 1, py: 0.5, borderRadius: 1, border: '1px solid', borderColor: 'grey.200' }}>
-                        {displayValue}
-                      </Typography>
-                    </Box>
-                  );
-                })}
-              </Box>
-            </Box>
-          )}
-        </Box>
-      ))}
-      {nextCursor && <Button sx={{ mt: 2 }} onClick={() => load(nextCursor)}>Load more</Button>}
-    </Paper>
-  );
 }
 
 const INDUSTRIES = [
@@ -459,17 +376,11 @@ function OrganisationTab({ canManageBrand }: { canManageBrand: boolean }) {
 export default function SettingsPage() {
   const { hasPermission } = usePermissions();
   const canManageBrand = hasPermission('brand.manage');
-  const [tab, setTab] = useState(0);
 
   return (
     <Box>
       <Typography variant="h1" sx={{ mb: 3 }}>Settings</Typography>
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 3, borderBottom: '1px solid', borderColor: 'divider' }}>
-        <Tab label="Brand profile" />
-        {canManageBrand && <Tab label="Audit log" />}
-      </Tabs>
-      {tab === 0 && <OrganisationTab canManageBrand={canManageBrand} />}
-      {tab === 1 && canManageBrand && <AuditLogTab />}
+      <OrganisationTab canManageBrand={canManageBrand} />
     </Box>
   );
 }
