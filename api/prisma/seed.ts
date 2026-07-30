@@ -128,9 +128,17 @@ type SeedProductOpts = {
 async function ensureRichProduct(opts: SeedProductOpts) {
   const existing = await prisma.product.findFirst({
     where: { organisationId: opts.organisationId, sku: opts.sku },
-    include: { passport: true, images: true },
+    include: { passport: true, images: true, sustainability: true },
   });
-  if (existing) return existing;
+  if (existing) {
+    // Keep re-seeds aligned with publish blockers (full sustainability block).
+    await prisma.sustainability.upsert({
+      where: { productId: existing.id },
+      create: { productId: existing.id, ...opts.sustainability },
+      update: opts.sustainability,
+    });
+    return existing;
+  }
 
   const product = await prisma.product.create({
     data: {
@@ -854,6 +862,44 @@ async function main() {
     organisationId: (await prisma.organisation.findUniqueOrThrow({ where: { publicSlug: 'atlas-goods' } })).id,
     passwordHash,
   });
+
+  // Safety net: any product still missing sustainability numbers gets a complete block
+  // so publish / UI do not fail after rule changes.
+  const incomplete = await prisma.product.findMany({
+    where: {
+      OR: [
+        { sustainability: null },
+        { sustainability: { carbonFootprintKg: null } },
+        { sustainability: { waterConsumptionL: null } },
+        { sustainability: { recycledPercent: null } },
+        { sustainability: { repairabilityScore: null } },
+      ],
+    },
+    select: { id: true },
+  });
+  for (const product of incomplete) {
+    await prisma.sustainability.upsert({
+      where: { productId: product.id },
+      create: {
+        productId: product.id,
+        carbonFootprintKg: 2,
+        waterConsumptionL: 50,
+        recycledPercent: 0,
+        repairabilityScore: 5,
+        recyclable: true,
+      },
+      update: {
+        carbonFootprintKg: 2,
+        waterConsumptionL: 50,
+        recycledPercent: 0,
+        repairabilityScore: 5,
+        recyclable: true,
+      },
+    });
+  }
+  if (incomplete.length) {
+    console.log(`Patched complete sustainability on ${incomplete.length} product(s).`);
+  }
 
   console.log('Seed complete — multi-brand MVP demo data.');
   console.log(`Password for all demo users: ${PASSWORD}`);
