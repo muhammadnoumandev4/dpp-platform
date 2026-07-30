@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
-import { Alert, Box, Button, CircularProgress, Paper, Table, TableBody, TableCell, TableHead, TableRow, Typography, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { Alert, Box, Button, CircularProgress, Paper, Table, TableBody, TableContainer, TableCell, TableHead, TableRow, Typography, ToggleButton, ToggleButtonGroup } from '@mui/material';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import { api } from '@/lib/api/client';
@@ -147,31 +147,33 @@ export default function AnalyticsPage() {
           )}
         </Paper>
 
-        <Paper variant="outlined" sx={{ p: 3, flex: 2, minWidth: 340 }}>
+        <Paper variant="outlined" sx={{ p: 3, flex: 2, minWidth: 0 }}>
           <Typography variant="h3" sx={{ mb: 2 }}>Latest scans</Typography>
           {data.latestScans.length === 0 ? (
             <Typography variant="body2" color="text.secondary">No scans recorded yet.</Typography>
           ) : (
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Product</TableCell>
-                  <TableCell>Browser / OS</TableCell>
-                  <TableCell>Country</TableCell>
-                  <TableCell>When</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {data.latestScans.map((scan) => (
-                  <TableRow key={scan.id}>
-                    <TableCell>{scan.passport.product.name}</TableCell>
-                    <TableCell>{[scan.browser, scan.os].filter(Boolean).join(' / ') || '—'}</TableCell>
-                    <TableCell>{scan.country ?? '—'}</TableCell>
-                    <TableCell>{new Date(scan.timestamp).toLocaleString()}</TableCell>
+            <TableContainer sx={{ overflowX: 'auto' }}>
+              <Table size="small" sx={{ minWidth: 480 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Product</TableCell>
+                    <TableCell>Browser / OS</TableCell>
+                    <TableCell>Country</TableCell>
+                    <TableCell>When</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHead>
+                <TableBody>
+                  {data.latestScans.map((scan) => (
+                    <TableRow key={scan.id}>
+                      <TableCell>{scan.passport.product.name}</TableCell>
+                      <TableCell>{[scan.browser, scan.os].filter(Boolean).join(' / ') || '—'}</TableCell>
+                      <TableCell>{scan.country ?? '—'}</TableCell>
+                      <TableCell>{new Date(scan.timestamp).toLocaleString()}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           )}
         </Paper>
       </Box>

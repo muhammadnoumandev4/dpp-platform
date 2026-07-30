@@ -29,6 +29,8 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
@@ -145,7 +147,17 @@ export default function PassportsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sort, setSort] = useState('newest');
+  // Cards read far better than a sideways-scrolling table on a phone, so narrow
+  // screens start in grid view; an explicit toggle by the user always wins.
+  const muiTheme = useTheme();
+  const compactScreen = useMediaQuery(muiTheme.breakpoints.down('md'));
+  const dialogFullScreen = useMediaQuery(muiTheme.breakpoints.down('sm'));
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [viewModePinned, setViewModePinned] = useState(false);
+
+  useEffect(() => {
+    if (!viewModePinned) setViewMode(compactScreen ? 'grid' : 'list');
+  }, [compactScreen, viewModePinned]);
   const [page, setPage] = useState(1);
   const canManageLifecycle = Boolean(user?.permissions?.includes('products.publish'));
 
@@ -255,7 +267,11 @@ export default function PassportsPage() {
           exclusive
           size="small"
           value={viewMode}
-          onChange={(_, value: 'list' | 'grid' | null) => value && setViewMode(value)}
+          onChange={(_, value: 'list' | 'grid' | null) => {
+            if (!value) return;
+            setViewModePinned(true);
+            setViewMode(value);
+          }}
           aria-label="Passport view"
           sx={{ ml: { sm: 'auto' } }}
         >
@@ -414,7 +430,7 @@ export default function PassportsPage() {
         </Box>
       )}
 
-      <Dialog open={Boolean(historyProduct)} onClose={() => setHistoryProduct(null)} fullWidth maxWidth="sm">
+      <Dialog open={Boolean(historyProduct)} onClose={() => setHistoryProduct(null)} fullWidth maxWidth="sm" fullScreen={dialogFullScreen}>
         <DialogTitle>
           {historyProduct ? `${historyProduct.product.name} — version history` : 'Version history'}
         </DialogTitle>

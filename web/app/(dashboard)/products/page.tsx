@@ -30,6 +30,8 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
 import LaunchOutlinedIcon from '@mui/icons-material/LaunchOutlined';
@@ -159,7 +161,17 @@ export default function ProductsListPage() {
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // Cards read far better than a sideways-scrolling table on a phone, so narrow
+  // screens start in grid view; an explicit toggle by the user always wins.
+  const muiTheme = useTheme();
+  const compactScreen = useMediaQuery(muiTheme.breakpoints.down('md'));
+  const dialogFullScreen = useMediaQuery(muiTheme.breakpoints.down('sm'));
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [viewModePinned, setViewModePinned] = useState(false);
+
+  useEffect(() => {
+    if (!viewModePinned) setViewMode(compactScreen ? 'grid' : 'list');
+  }, [compactScreen, viewModePinned]);
   const canManageLifecycle = Boolean(user?.permissions?.includes('products.delete'));
   const canCreate = Boolean(user?.permissions?.includes('products.create'));
 
@@ -254,7 +266,11 @@ export default function ProductsListPage() {
           exclusive
           size="small"
           value={viewMode}
-          onChange={(_, value: 'list' | 'grid' | null) => value && setViewMode(value)}
+          onChange={(_, value: 'list' | 'grid' | null) => {
+            if (!value) return;
+            setViewModePinned(true);
+            setViewMode(value);
+          }}
           aria-label="Product view"
           sx={{ ml: { sm: 'auto' } }}
         >
@@ -415,7 +431,7 @@ export default function ProductsListPage() {
         </Box>
       )}
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth fullScreen={dialogFullScreen}>
         <DialogTitle>New product</DialogTitle>
         <DialogContent>
           <TextField label="Product name" name="name" fullWidth required autoFocus sx={{ mt: 1, mb: 2 }} value={name} onChange={(e) => setName(e.target.value)} />

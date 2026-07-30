@@ -12,6 +12,7 @@ import {
   Paper,
   Table,
   TableBody,
+  TableContainer,
   TableCell,
   TableHead,
   TableRow,
@@ -337,26 +338,28 @@ export function PassportView({
       {product.materials.length > 0 && (
         <>
           <Typography variant="overline" color="text.secondary">Materials</Typography>
-          <Table size="small" sx={{ mb: 3, mt: 0.5 }} aria-label="Material composition">
-            <TableHead>
-              <TableRow>
-                <TableCell>Material</TableCell>
-                <TableCell>Origin</TableCell>
-                <TableCell align="right">Percentage</TableCell>
-                <TableCell align="right">Recyclable</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {product.materials.map((m) => (
-                <TableRow key={m.id}>
-                  <TableCell>{m.name}</TableCell>
-                  <TableCell>{m.countryOfOrigin?.name ?? '—'}</TableCell>
-                  <TableCell align="right">{m.percentage}%</TableCell>
-                  <TableCell align="right">{m.recyclable ? 'Yes' : 'No'}</TableCell>
+          <TableContainer sx={{ mb: 3, mt: 0.5, overflowX: 'auto' }}>
+            <Table size="small" aria-label="Material composition">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Material</TableCell>
+                  <TableCell>Origin</TableCell>
+                  <TableCell align="right">Percentage</TableCell>
+                  <TableCell align="right">Recyclable</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {product.materials.map((m) => (
+                  <TableRow key={m.id}>
+                    <TableCell>{m.name}</TableCell>
+                    <TableCell>{m.countryOfOrigin?.name ?? '—'}</TableCell>
+                    <TableCell align="right">{m.percentage}%</TableCell>
+                    <TableCell align="right">{m.recyclable ? 'Yes' : 'No'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </>
       )}
 

@@ -23,6 +23,8 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
 import { api, ApiError } from '@/lib/api/client';
 import { useAuth } from '@/lib/auth-context';
@@ -49,6 +51,8 @@ interface InvitationRow {
 export default function UsersPage() {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<UserRow[] | null>(null);
+  const muiTheme = useTheme();
+  const compactScreen = useMediaQuery(muiTheme.breakpoints.down('sm'));
   const [invitations, setInvitations] = useState<InvitationRow[]>([]);
   const [error, setError] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -133,42 +137,79 @@ export default function UsersPage() {
         <Button variant="contained" onClick={() => { setDialogOpen(true); setInviteLink(null); setRole('EDITOR'); }}>+ Invite user</Button>
       </Box>
 
-      <TableContainer component={Paper} variant="outlined" sx={{ mb: invitations.length ? 3 : 0 }}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>User</TableCell>
-              <TableCell>Role</TableCell>
-              <TableCell>Last active</TableCell>
-              <TableCell width={48} />
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {users.map((u) => (
-              <TableRow key={u.id} hover>
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                    <Avatar sx={{ width: 32, height: 32, fontSize: 14 }}>{u.name[0]}</Avatar>
-                    <Box>
-                      <Typography variant="subtitle2">{u.name}</Typography>
-                      <Typography variant="caption" color="text.secondary">{u.email}</Typography>
-                    </Box>
-                  </Box>
-                </TableCell>
-                <TableCell sx={{ textTransform: 'capitalize' }}>{u.role.toLowerCase()}</TableCell>
-                <TableCell>{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : 'Never'}</TableCell>
-                <TableCell>
-                  {currentUser?.id !== u.id && u.role !== 'OWNER' && (
-                    <IconButton size="small" onClick={() => handleRemove(u.id)} aria-label="Remove user">
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                </TableCell>
+      {compactScreen ? (
+        // One row per person reads better than four squeezed columns on a phone.
+        <Paper variant="outlined" sx={{ mb: invitations.length ? 3 : 0 }}>
+          {users.map((u, index) => (
+            <Box
+              key={u.id}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
+                p: 2,
+                borderBottom: index === users.length - 1 ? 'none' : '1px solid',
+                borderColor: 'divider',
+              }}
+            >
+              <Avatar sx={{ width: 36, height: 36, fontSize: 14 }}>{u.name[0]}</Avatar>
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography variant="subtitle2" noWrap>{u.name}</Typography>
+                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                  {u.email}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  <Box component="span" sx={{ textTransform: 'capitalize' }}>{u.role.toLowerCase()}</Box>
+                  {' · last active '}
+                  {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : 'never'}
+                </Typography>
+              </Box>
+              {currentUser?.id !== u.id && u.role !== 'OWNER' && (
+                <IconButton size="small" onClick={() => handleRemove(u.id)} aria-label={`Remove ${u.name}`}>
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              )}
+            </Box>
+          ))}
+        </Paper>
+      ) : (
+        <TableContainer component={Paper} variant="outlined" sx={{ mb: invitations.length ? 3 : 0 }}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>User</TableCell>
+                <TableCell>Role</TableCell>
+                <TableCell>Last active</TableCell>
+                <TableCell width={48} />
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            </TableHead>
+            <TableBody>
+              {users.map((u) => (
+                <TableRow key={u.id} hover>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Avatar sx={{ width: 32, height: 32, fontSize: 14 }}>{u.name[0]}</Avatar>
+                      <Box>
+                        <Typography variant="subtitle2">{u.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">{u.email}</Typography>
+                      </Box>
+                    </Box>
+                  </TableCell>
+                  <TableCell sx={{ textTransform: 'capitalize' }}>{u.role.toLowerCase()}</TableCell>
+                  <TableCell>{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : 'Never'}</TableCell>
+                  <TableCell>
+                    {currentUser?.id !== u.id && u.role !== 'OWNER' && (
+                      <IconButton size="small" onClick={() => handleRemove(u.id)} aria-label="Remove user">
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
 
       {invitations.length > 0 && (
         <Paper variant="outlined" sx={{ p: 3 }}>
@@ -184,7 +225,7 @@ export default function UsersPage() {
         </Paper>
       )}
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth fullScreen={compactScreen}>
         <DialogTitle>Invite user</DialogTitle>
         <DialogContent>
           {inviteLink ? (

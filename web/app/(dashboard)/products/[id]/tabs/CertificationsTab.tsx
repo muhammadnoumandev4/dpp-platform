@@ -15,6 +15,8 @@ import {
   Typography,
   Chip,
 } from '@mui/material';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdfOutlined';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
@@ -26,6 +28,8 @@ import { useToast } from '@/components/providers/ToastProvider';
 
 export function CertificationsTab({ product, onSaved }: { product: FullProduct; onSaved: () => void }) {
   const [open, setOpen] = useState(false);
+  const muiTheme = useTheme();
+  const compactScreen = useMediaQuery(muiTheme.breakpoints.down('sm'));
   const [name, setName] = useState('');
   const [issuingAuthority, setIssuingAuthority] = useState('');
   const [issueDate, setIssueDate] = useState('');
@@ -151,7 +155,7 @@ export function CertificationsTab({ product, onSaved }: { product: FullProduct; 
         </Box>
       )}
 
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth fullScreen={compactScreen}>
         <DialogTitle>Add certification</DialogTitle>
         <DialogContent>
           <TextField label="Certification name" fullWidth required sx={{ mt: 1, mb: 2 }} value={name} onChange={(e) => setName(e.target.value)} />

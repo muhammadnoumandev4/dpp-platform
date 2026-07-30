@@ -14,6 +14,7 @@ import {
   Paper,
   Table,
   TableBody,
+  TableContainer,
   TableCell,
   TableHead,
   TableRow,
@@ -340,48 +341,52 @@ export default function DashboardPage() {
                 <Typography variant="body2" color="text.secondary">No products yet.</Typography>
               </Box>
             ) : (
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Product</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell align="right">Views</TableCell>
-                    <TableCell>Created</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {recentProducts.map((product) => (
-                    <TableRow
-                      key={product.id}
-                      hover
-                      onClick={() => router.push(`/products/${product.id}`)}
-                      sx={{ cursor: 'pointer' }}
-                    >
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                          <Avatar
-                            variant="rounded"
-                            src={product.images[0] ? `${API_URL}/uploads/${product.images[0].fileKey}` : undefined}
-                            sx={{ width: 38, height: 38 }}
-                          />
-                          <Box sx={{ minWidth: 0 }}>
-                            <Typography variant="subtitle2" noWrap>{product.name}</Typography>
-                            <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>{product.sku}</Typography>
-                          </Box>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <StatusPill status={product.status} />
-                        {product.hasUnpublishedChanges && (
-                          <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.5 }}>Changes pending</Typography>
-                        )}
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontFamily: 'monospace' }}>{product.views.toLocaleString()}</TableCell>
-                      <TableCell>{new Date(product.createdAt).toLocaleDateString()}</TableCell>
+              // Scrolls sideways on narrow screens; `overflow: hidden` on the
+              // Paper alone would clip the last columns with no way to reach them.
+              <TableContainer sx={{ overflowX: 'auto' }}>
+                <Table size="small" sx={{ minWidth: 520 }}>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Product</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell align="right">Views</TableCell>
+                      <TableCell>Created</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHead>
+                  <TableBody>
+                    {recentProducts.map((product) => (
+                      <TableRow
+                        key={product.id}
+                        hover
+                        onClick={() => router.push(`/products/${product.id}`)}
+                        sx={{ cursor: 'pointer' }}
+                      >
+                        <TableCell>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            <Avatar
+                              variant="rounded"
+                              src={product.images[0] ? `${API_URL}/uploads/${product.images[0].fileKey}` : undefined}
+                              sx={{ width: 38, height: 38 }}
+                            />
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography variant="subtitle2" noWrap>{product.name}</Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>{product.sku}</Typography>
+                            </Box>
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <StatusPill status={product.status} />
+                          {product.hasUnpublishedChanges && (
+                            <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.5 }}>Changes pending</Typography>
+                          )}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontFamily: 'monospace' }}>{product.views.toLocaleString()}</TableCell>
+                        <TableCell>{new Date(product.createdAt).toLocaleDateString()}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             )}
           </Paper>
         </Grid>

@@ -11,6 +11,7 @@ import {
   MenuItem,
   Paper,
   Table,
+  TableContainer,
   TableBody,
   TableCell,
   TableHead,
@@ -18,6 +19,8 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
 import { api, ApiError } from '@/lib/api/client';
 import { toMaterialInput } from '@/lib/types';
@@ -105,6 +108,60 @@ export function MaterialsTab({
     }
   }
 
+  const muiTheme = useTheme();
+  const compactScreen = useMediaQuery(muiTheme.breakpoints.down('md'));
+
+  const materialField = (m: (typeof rows)[number], i: number) => (
+    <TextField
+      select
+      size="small"
+      fullWidth
+      label="Select material"
+      value={m.name}
+      onChange={(e) => update(i, { name: e.target.value })}
+    >
+      <MenuItem value="" disabled>Select material</MenuItem>
+      {m.name && !presetNames.has(m.name) && (
+        <MenuItem value={m.name}>{m.name} (legacy custom value)</MenuItem>
+      )}
+      {Object.entries(materialGroups).flatMap(([group, presets]) => [
+        <ListSubheader key={`group-${group}`}>{group}</ListSubheader>,
+        ...presets.map((preset) => (
+          <MenuItem key={preset.id} value={preset.name}>{preset.name}</MenuItem>
+        )),
+      ])}
+    </TextField>
+  );
+
+  const originField = (m: (typeof rows)[number], i: number) => (
+    <TextField
+      select
+      size="small"
+      fullWidth
+      label={compactScreen ? 'Country of origin' : undefined}
+      value={m.countryOfOriginId ?? ''}
+      onChange={(e) => update(i, { countryOfOriginId: e.target.value || null })}
+      inputProps={{ 'aria-label': 'Country of origin' }}
+    >
+      <MenuItem value="">—</MenuItem>
+      {countries.map((c) => (
+        <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+      ))}
+    </TextField>
+  );
+
+  const percentageField = (m: (typeof rows)[number], i: number) => (
+    <TextField
+      size="small"
+      fullWidth
+      type="number"
+      label={compactScreen ? 'Percentage' : undefined}
+      inputProps={{ min: 0, max: 100, step: 0.1, 'aria-label': 'Percentage' }}
+      value={m.percentage}
+      onChange={(e) => update(i, { percentage: Number(e.target.value) })}
+    />
+  );
+
   return (
     <Paper variant="outlined" sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -113,75 +170,74 @@ export function MaterialsTab({
       </Box>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell>Material</TableCell>
-            <TableCell width={160}>Origin</TableCell>
-            <TableCell width={100}>%</TableCell>
-            <TableCell width={90}>Recyclable</TableCell>
-            <TableCell width={40} />
-          </TableRow>
-        </TableHead>
-        <TableBody>
+      {compactScreen ? (
+        // A five-column editor cannot be filled in on a phone; each material
+        // becomes a stacked card instead of a sideways-scrolling row.
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {rows.map((m, i) => (
-            <TableRow key={m.id}>
-              <TableCell>
-                <TextField
-                  select
-                  size="small"
-                  fullWidth
-                  label="Select material"
-                  value={m.name}
-                  onChange={(e) => update(i, { name: e.target.value })}
-                >
-                  <MenuItem value="" disabled>Select material</MenuItem>
-                  {m.name && !presetNames.has(m.name) && (
-                    <MenuItem value={m.name}>{m.name} (legacy custom value)</MenuItem>
-                  )}
-                  {Object.entries(materialGroups).flatMap(([group, presets]) => [
-                    <ListSubheader key={`group-${group}`}>{group}</ListSubheader>,
-                    ...presets.map((preset) => (
-                      <MenuItem key={preset.id} value={preset.name}>{preset.name}</MenuItem>
-                    )),
-                  ])}
-                </TextField>
-              </TableCell>
-              <TableCell>
-                <TextField
-                  select
-                  size="small"
-                  fullWidth
-                  value={m.countryOfOriginId ?? ''}
-                  onChange={(e) => update(i, { countryOfOriginId: e.target.value || null })}
-                >
-                  <MenuItem value="">—</MenuItem>
-                  {countries.map((c) => (
-                    <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                  ))}
-                </TextField>
-              </TableCell>
-              <TableCell>
-                <TextField
-                  size="small"
-                  type="number"
-                  inputProps={{ min: 0, max: 100, step: 0.1 }}
-                  value={m.percentage}
-                  onChange={(e) => update(i, { percentage: Number(e.target.value) })}
-                />
-              </TableCell>
-              <TableCell>
-                <Checkbox checked={m.recyclable} onChange={(e) => update(i, { recyclable: e.target.checked })} />
-              </TableCell>
-              <TableCell>
+            <Box
+              key={m.id}
+              sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1, display: 'flex', flexDirection: 'column', gap: 2 }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                <Box sx={{ flex: 1, minWidth: 0 }}>{materialField(m, i)}</Box>
                 <IconButton size="small" onClick={() => removeRow(i)} aria-label="Remove material">
                   <DeleteIcon fontSize="small" />
                 </IconButton>
-              </TableCell>
-            </TableRow>
+              </Box>
+              {originField(m, i)}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Box sx={{ width: 120 }}>{percentageField(m, i)}</Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Checkbox
+                    id={`recyclable-${m.id}`}
+                    checked={m.recyclable}
+                    onChange={(e) => update(i, { recyclable: e.target.checked })}
+                  />
+                  <Typography component="label" htmlFor={`recyclable-${m.id}`} variant="body2">
+                    Recyclable
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
           ))}
-        </TableBody>
-      </Table>
+        </Box>
+      ) : (
+        <TableContainer sx={{ overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 640 }}>
+            <TableHead>
+              <TableRow>
+                <TableCell>Material</TableCell>
+                <TableCell width={160}>Origin</TableCell>
+                <TableCell width={100}>%</TableCell>
+                <TableCell width={90}>Recyclable</TableCell>
+                <TableCell width={40} />
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {rows.map((m, i) => (
+                <TableRow key={m.id}>
+                  <TableCell>{materialField(m, i)}</TableCell>
+                  <TableCell>{originField(m, i)}</TableCell>
+                  <TableCell>{percentageField(m, i)}</TableCell>
+                  <TableCell>
+                    <Checkbox
+                      checked={m.recyclable}
+                      onChange={(e) => update(i, { recyclable: e.target.checked })}
+                      inputProps={{ 'aria-label': 'Recyclable' }}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <IconButton size="small" onClick={() => removeRow(i)} aria-label="Remove material">
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
         <Typography variant="caption" color={Math.abs(total - 100) < 0.01 ? 'success.main' : 'warning.main'}>

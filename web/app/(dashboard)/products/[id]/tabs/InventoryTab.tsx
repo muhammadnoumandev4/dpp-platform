@@ -138,8 +138,8 @@ export function InventoryTab({ product, isPublished }: { product: FullProduct; i
         </Alert>
       )}
 
-      <TableContainer component={Paper} variant="outlined">
-        <Table size="small">
+      <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto' }}>
+        <Table size="small" sx={{ minWidth: 620 }}>
           <TableHead>
             <TableRow>
               <TableCell>Serial</TableCell>

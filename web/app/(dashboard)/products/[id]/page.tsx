@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Alert, Avatar, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Paper, Tab, Tabs, Typography } from '@mui/material';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -31,6 +33,9 @@ export default function ProductEditorPage() {
   const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const muiTheme = useTheme();
+  const compactScreen = useMediaQuery(muiTheme.breakpoints.down('sm'));
+
   const id = params.id as string;
   const { product, categories, countries, materialPresets, publishStatus, loadError, reload } = useProductEditor(id);
   const [tab, setTab] = useState(searchParams.get('tab') === 'preview' ? 6 : 0);
@@ -167,7 +172,7 @@ export default function ProductEditorPage() {
           boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5, minWidth: 0, flex: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5, minWidth: 0, flex: '1 1 260px' }}>
           <Avatar
             variant="rounded"
             src={cover ? `${API_URL}/uploads/${cover.fileKey}` : undefined}
@@ -199,8 +204,17 @@ export default function ProductEditorPage() {
           </Box>
         </Box>
 
-        {/* Header Actions (Pinned to Far Right Corner) */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', ml: 'auto' }}>
+        {/* Header actions: their own full-width row on a phone, pinned right from md up. */}
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            flexWrap: 'wrap',
+            flex: { xs: '1 1 100%', md: '0 0 auto' },
+            ml: { md: 'auto' },
+          }}
+        >
           {publishStatus.uuid && (
             <Button
               component="a"
@@ -287,6 +301,7 @@ export default function ProductEditorPage() {
           display: 'flex',
           justifyContent: tab === 0 ? 'flex-end' : 'space-between',
           alignItems: 'center',
+          flexWrap: 'wrap',
           gap: 2,
           mt: 3,
           pt: 2,
@@ -339,7 +354,7 @@ export default function ProductEditorPage() {
         )}
       </Box>
 
-      <Dialog open={successDialogOpen} onClose={() => setSuccessDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={successDialogOpen} onClose={() => setSuccessDialogOpen(false)} maxWidth="sm" fullWidth fullScreen={compactScreen}>
         <DialogTitle sx={{ pr: 6, display: 'flex', alignItems: 'center', gap: 1 }}>
           <CheckCircleIcon color="success" /> Passport published
           <IconButton
