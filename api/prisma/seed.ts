@@ -12,6 +12,7 @@ import { mkdir, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import * as QRCode from 'qrcode';
 import { provisionOrganisationCatalog } from '../src/taxonomy/catalog.constants';
+import { makeDemoPdf, makeProductImagePng } from './seed-assets';
 
 const prisma = new PrismaClient();
 
@@ -20,29 +21,21 @@ const WEB_URL = process.env.WEB_PUBLIC_URL || 'http://localhost:3001';
 const API_URL = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
 const UPLOAD_DIR = process.env.UPLOAD_DIR || join(process.cwd(), 'uploads');
 
-/** Visible seed artwork (QR-style PNG) so public passports are not blank 1×1 placeholders. */
-async function makePlaceholderPng(label: string): Promise<Buffer> {
-  return QRCode.toBuffer(`DPP seed · ${label}`, {
-    width: 640,
-    margin: 2,
-    color: { dark: '#0F3D2E', light: '#E7F2EC' },
-  });
+/**
+ * Studio-style placeholder product photo. Deliberately *not* a QR code — the
+ * cover image column, editor gallery and public passport hero all render this,
+ * and a QR there reads as a broken image rather than sample data.
+ */
+function makePlaceholderPng(caption: string, variant = 0): Buffer {
+  return makeProductImagePng({ caption, variant });
 }
-
-/** Minimal valid-enough PDF header for download demos. */
-const TINY_PDF = Buffer.from(
-  '%PDF-1.1\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n',
-  'utf8',
-);
 
 async function putFile(key: string, buffer: Buffer) {
   const destination = join(UPLOAD_DIR, key);
   await mkdir(dirname(destination), { recursive: true });
-  try {
-    await writeFile(destination, buffer, { flag: 'wx' });
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-  }
+  // Overwrite rather than skip-if-exists: seed artwork is deterministic, and a
+  // re-seed after changing the generator must replace stale files on the volume.
+  await writeFile(destination, buffer);
   return `${API_URL}/uploads/${key}`;
 }
 
@@ -171,7 +164,7 @@ async function ensureRichProduct(opts: SeedProductOpts) {
 
   if (opts.withCover) {
     const key = `${opts.organisationId}/images/${product.id}-cover.png`;
-    await putFile(key, await makePlaceholderPng(`${opts.sku} cover`));
+    await putFile(key, makePlaceholderPng(opts.sku, 0));
     await prisma.productImage.create({
       data: { productId: product.id, fileKey: key, isCover: true, altText: 'Cover', sortOrder: 0 },
     });
@@ -180,7 +173,7 @@ async function ensureRichProduct(opts: SeedProductOpts) {
   if (opts.withGallery) {
     for (let i = 1; i <= 2; i++) {
       const key = `${opts.organisationId}/images/${product.id}-gallery-${i}.png`;
-      await putFile(key, await makePlaceholderPng(`${opts.sku} gallery ${i}`));
+      await putFile(key, makePlaceholderPng(opts.sku, i));
       await prisma.productImage.create({
         data: {
           productId: product.id,
@@ -195,7 +188,25 @@ async function ensureRichProduct(opts: SeedProductOpts) {
 
   if (opts.withCerts) {
     const certKey = `${opts.organisationId}/certs/${product.id}-got.pdf`;
-    await putFile(certKey, TINY_PDF);
+    await putFile(
+      certKey,
+      await makeDemoPdf({
+        title: 'GOTS Organic Certificate',
+        subtitle: 'Global Organic Textile Standard · issued by Control Union',
+        rows: [
+          ['Product', product.name],
+          ['SKU', opts.sku],
+          ['Certificate number', `GOTS-${opts.sku}-2025`],
+          ['Issued', '1 June 2025'],
+          ['Valid until', '1 June 2027'],
+          ['Scope', 'Organic fibre content, processing and trade'],
+        ],
+        body: [
+          'This certificate confirms that the product identified above has been processed in accordance with the Global Organic Textile Standard, covering organic fibre content, environmental criteria across the supply chain, and social criteria at each processing stage.',
+          'Certification is subject to annual on-site inspection. Validity may be withdrawn if the certified entity ceases to meet the standard.',
+        ],
+      }),
+    );
     await prisma.certification.create({
       data: {
         productId: product.id,
@@ -211,21 +222,59 @@ async function ensureRichProduct(opts: SeedProductOpts) {
   }
 
   if (opts.withDocs) {
-    const docs: { type: DocumentType; label: string }[] = [
-      { type: DocumentType.MANUAL, label: 'user-manual.pdf' },
-      { type: DocumentType.WARRANTY, label: 'warranty.pdf' },
-      { type: DocumentType.DATASHEET, label: 'datasheet.pdf' },
+    const docs: { type: DocumentType; label: string; title: string; body: string[] }[] = [
+      {
+        type: DocumentType.MANUAL,
+        label: 'user-manual.pdf',
+        title: 'User Manual',
+        body: [
+          'Care and use. Follow the care symbols on the product label. Wash at or below 30°C on a gentle cycle, reshape while damp and dry flat away from direct heat. Avoid bleach and fabric softener, both of which shorten fibre life.',
+          'Repair. Minor seam and fastening repairs are covered by the repairability rating published on this product passport. Contact the brand for a repair kit or an authorised repair partner before discarding the product.',
+          'End of life. Separate the components listed in the Materials section of the passport and present them to the appropriate recycling stream. Do not dispose of the product in general household waste.',
+        ],
+      },
+      {
+        type: DocumentType.WARRANTY,
+        label: 'warranty.pdf',
+        title: 'Warranty Statement',
+        body: [
+          'Coverage. This product is warranted against defects in materials and workmanship for two years from the documented date of purchase, under normal use consistent with the accompanying user manual.',
+          'Exclusions. The warranty does not cover normal wear, damage caused by accident or misuse, or products altered by an unauthorised repairer.',
+          'Making a claim. Present this passport identifier together with proof of purchase. Where a repair is possible it will be offered in preference to replacement, in line with our circularity commitments.',
+        ],
+      },
+      {
+        type: DocumentType.DATASHEET,
+        label: 'datasheet.pdf',
+        title: 'Technical Datasheet',
+        body: [
+          'Composition and sourcing are published in full in the Materials section of the digital product passport, including the country of origin and recyclability of each component.',
+          'Environmental figures. Carbon footprint and water consumption are calculated per finished unit using a cradle-to-gate boundary and are reviewed annually.',
+          'Compliance. This datasheet accompanies the digital product passport and is intended to support downstream due diligence, resale and recycling decisions.',
+        ],
+      },
     ];
     for (const [i, doc] of docs.entries()) {
       const key = `${opts.organisationId}/documents/${product.id}-${doc.label}`;
-      await putFile(key, TINY_PDF);
+      const pdf = await makeDemoPdf({
+        title: doc.title,
+        subtitle: `${product.name} · ${opts.sku}`,
+        rows: [
+          ['Product', product.name],
+          ['SKU', opts.sku],
+          ['Document type', doc.title],
+          ['Revision', 'Rev. A · 2025'],
+        ],
+        body: doc.body,
+      });
+      await putFile(key, pdf);
       await prisma.document.create({
         data: {
           productId: product.id,
           type: doc.type,
           fileKey: key,
           fileName: doc.label,
-          sizeBytes: TINY_PDF.length,
+          sizeBytes: pdf.length,
           sortOrder: i,
         },
       });
@@ -625,8 +674,8 @@ async function seedBrandCatalog(
     description: `${brand.name}: incomplete draft without cover — test publish blockers.`,
     productionDate: new Date('2026-03-14'),
     materials: [
-      { name: 'Primary fibre', percentage: 80, countryId: pt.id, recyclable: true },
-      { name: 'Secondary fibre', percentage: 20, countryId: it.id, recyclable: false },
+      { name: 'Linen', percentage: 80, countryId: pt.id, recyclable: true },
+      { name: 'Elastane', percentage: 20, countryId: it.id, recyclable: false },
     ],
     sustainability: {
       carbonFootprintKg: 6.4,
@@ -652,8 +701,8 @@ async function seedBrandCatalog(
     withCerts: true,
     withDocs: true,
     materials: [
-      { name: 'Organic material A', percentage: 70, countryId: pt.id, recyclable: true },
-      { name: 'Organic material B', percentage: 30, countryId: it.id, recyclable: true },
+      { name: 'Organic Cotton', percentage: 70, countryId: pt.id, recyclable: true },
+      { name: 'Hemp', percentage: 30, countryId: it.id, recyclable: true },
     ],
     sustainability: {
       carbonFootprintKg: 4.1,
@@ -684,9 +733,9 @@ async function seedBrandCatalog(
     scanCount: brand.suspended ? 8 : 36 + (brand.slug.length % 20),
     itemCount: 4,
     materials: [
-      { name: 'Recycled content', percentage: 55, countryId: de.id, recyclable: true },
-      { name: 'Natural rubber', percentage: 35, countryId: pt.id, recyclable: false },
-      { name: 'Organic lining', percentage: 10, countryId: it.id, recyclable: true },
+      { name: 'Recycled Polyester', percentage: 55, countryId: de.id, recyclable: true },
+      { name: 'Vegan Leather', percentage: 35, countryId: pt.id, recyclable: false },
+      { name: 'Viscose', percentage: 10, countryId: it.id, recyclable: true },
     ],
     sustainability: {
       carbonFootprintKg: 9.2,
@@ -715,7 +764,7 @@ async function seedBrandCatalog(
     scanCount: brand.suspended ? 4 : 22 + (p.charCodeAt(0) % 15),
     itemCount: 2,
     materials: [
-      { name: 'Merino wool', percentage: 100, countryId: pt.id, recyclable: true },
+      { name: 'Merino Wool', percentage: 100, countryId: pt.id, recyclable: true },
     ],
     sustainability: {
       carbonFootprintKg: 3.8,
@@ -742,7 +791,7 @@ async function seedBrandCatalog(
     unpublish: true,
     versionCount: 1,
     scanCount: 5,
-    materials: [{ name: 'Merino wool', percentage: 100, countryId: pt.id, recyclable: true }],
+    materials: [{ name: 'Merino Wool', percentage: 100, countryId: pt.id, recyclable: true }],
     sustainability: {
       carbonFootprintKg: 3.3,
       waterConsumptionL: 80,
@@ -764,7 +813,7 @@ async function seedBrandCatalog(
     productionDate: new Date('2025-11-01'),
     deletedAt: new Date('2026-07-01'),
     withCover: true,
-    materials: [{ name: 'Organic cotton', percentage: 100, countryId: it.id, recyclable: true }],
+    materials: [{ name: 'Organic Cotton', percentage: 100, countryId: it.id, recyclable: true }],
     sustainability: {
       carbonFootprintKg: 1.2,
       waterConsumptionL: 40,
