@@ -41,7 +41,6 @@ model Organisation {
   website                String?
   country                String?
   industry               String?
-  emailCollectionEnabled Boolean   @default(false)
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
   disabledAt             DateTime?
