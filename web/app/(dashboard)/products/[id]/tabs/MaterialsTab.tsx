@@ -122,7 +122,7 @@ export function MaterialsTab({
     >
       <MenuItem value="" disabled>Select material</MenuItem>
       {m.name && !presetNames.has(m.name) && (
-        <MenuItem value={m.name}>{m.name} (legacy custom value)</MenuItem>
+        <MenuItem value={m.name}>{m.name} (custom)</MenuItem>
       )}
       {Object.entries(materialGroups).flatMap(([group, presets]) => [
         <ListSubheader key={`group-${group}`}>{group}</ListSubheader>,

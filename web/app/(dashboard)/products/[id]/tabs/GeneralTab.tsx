@@ -7,6 +7,21 @@ import type { CategoryResponse, CountryResponse, FullProduct } from '@/lib/types
 import { useToast } from '@/components/providers/ToastProvider';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 
+/**
+ * Suggests a serial number that will not collide with previously generated ones.
+ * A fixed `-000001` suffix looked like a sequence but produced the same value for
+ * every product; the time-ordered suffix stays sortable while staying unique.
+ */
+function generateSerialNumber(sku: string): string {
+  const prefix = sku.trim() || 'SN';
+  const stamp = Date.now().toString(36).toUpperCase().slice(-6);
+  const salt = Math.floor(Math.random() * 36 ** 2)
+    .toString(36)
+    .toUpperCase()
+    .padStart(2, '0');
+  return `${prefix}-${stamp}${salt}`;
+}
+
 export function GeneralTab({
   product,
   categories,
@@ -83,17 +98,14 @@ export function GeneralTab({
             label="Serial number"
             fullWidth
             value={fields.serialNumber}
-            helperText={fields.sku ? `Manual input or Auto-generate (e.g. ${fields.sku}-000001)` : "Manual input or click Auto-generate"}
+            helperText="Manual input, or Auto-generate a unique serial from the SKU"
             onChange={(e) => setFields({ ...fields, serialNumber: e.target.value })}
             InputProps={{
               endAdornment: (
                 <Button
                   size="small"
                   variant="text"
-                  onClick={() => {
-                    const prefix = fields.sku ? fields.sku : 'SN';
-                    setFields({ ...fields, serialNumber: `${prefix}-000001` });
-                  }}
+                  onClick={() => setFields({ ...fields, serialNumber: generateSerialNumber(fields.sku) })}
                   sx={{ fontSize: 11, textTransform: 'none', whiteSpace: 'nowrap', fontWeight: 600 }}
                 >
                   Auto-generate
@@ -122,6 +134,7 @@ export function GeneralTab({
         </Grid>
         <Grid item xs={12} sm={6}>
           <TextField select label="Country of origin" fullWidth value={fields.countryOfOriginId} onChange={(e) => setFields({ ...fields, countryOfOriginId: e.target.value })}>
+            <MenuItem value=""><em>Not specified</em></MenuItem>
             {countries.length === 0 && <MenuItem value="" disabled>Country catalog unavailable</MenuItem>}
             {countries.map((c) => (
               <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>

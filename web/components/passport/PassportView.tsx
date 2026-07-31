@@ -404,8 +404,13 @@ export function PassportView({
                       )}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {cert.issuingAuthority ? `${cert.issuingAuthority} · ` : ''}
-                      {cert.expiryDate ? `valid to ${cert.expiryDate.slice(0, 10)}` : ''}
+                      {[
+                        cert.issuingAuthority,
+                        cert.issueDate ? `issued ${cert.issueDate.slice(0, 10)}` : null,
+                        cert.expiryDate ? `valid to ${cert.expiryDate.slice(0, 10)}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
                     </Typography>
                   </Box>
                   {cert.fileKey && (
