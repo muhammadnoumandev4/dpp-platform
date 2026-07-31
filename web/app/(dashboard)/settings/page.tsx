@@ -18,6 +18,7 @@ import { useConfirm } from '@/components/providers/ConfirmProvider';
 import { useToast } from '@/components/providers/ToastProvider';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import { usePermissions } from '@/lib/hooks/usePermissions';
+import type { CountryResponse } from '@/lib/types';
 
 interface Organisation {
   id: string;
@@ -74,6 +75,7 @@ function announceOrganisationUpdate(organisation: Organisation) {
 function OrganisationTab({ canManageBrand }: { canManageBrand: boolean }) {
   const [org, setOrg] = useState<Organisation | null>(null);
   const [original, setOriginal] = useState<Organisation | null>(null);
+  const [countries, setCountries] = useState<CountryResponse[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -89,6 +91,7 @@ function OrganisationTab({ canManageBrand }: { canManageBrand: boolean }) {
         setOriginal(organisation);
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'Could not load organisation.'));
+    api.get<CountryResponse[]>('/taxonomy/countries').then(setCountries).catch(() => setCountries([]));
   }, []);
 
   const dirty = Boolean(
@@ -324,13 +327,21 @@ function OrganisationTab({ canManageBrand }: { canManageBrand: boolean }) {
             onChange={(event) => setOrg({ ...org, website: event.target.value || null })}
           />
           <TextField
+            select
             label="Country"
             fullWidth
             disabled={!canManageBrand}
             value={org.country ?? ''}
-            placeholder="Italy"
             onChange={(event) => setOrg({ ...org, country: event.target.value || null })}
-          />
+          >
+            <MenuItem value=""><em>Not specified</em></MenuItem>
+            {org.country && !countries.some((c) => c.name === org.country) && (
+              <MenuItem value={org.country}>{org.country}</MenuItem>
+            )}
+            {countries.map((country) => (
+              <MenuItem key={country.id} value={country.name}>{country.name}</MenuItem>
+            ))}
+          </TextField>
           <TextField
             select
             label="Industry"
