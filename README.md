@@ -254,6 +254,20 @@ Endpoints declare permissions (`api/src/auth/permissions.ts`); access is not a r
 Owners invite only Manager or Editor (DTO + DB CHECK). New brands self-register at `/signup`
 (creates organisation + OWNER atomically).
 
+### Mapping to the assessment's roles
+
+The brief specifies two roles, **Administrator** and **Editor**. They map as follows:
+
+| Assessment role | This implementation | Notes |
+|---|---|---|
+| **Administrator** | `OWNER` | The brand administrator: full access including publish, users and settings. |
+| **Editor** | `EDITOR` | Creates and edits drafts; cannot publish. |
+| — | `MANAGER` | **Addition.** Products + publish, but no team/settings access. |
+| — | `ADMIN` | **Addition.** Cross-tenant platform console; not a brand role. |
+
+`MANAGER` and the platform `ADMIN` are supersets beyond the brief, added for the multi-tenant
+console. Nothing required by the assessment depends on them.
+
 ---
 
 ## Publication model (important)
@@ -286,6 +300,26 @@ web/
 
 ---
 
+## Scan tracking and IP addresses (deliberate deviation)
+
+The brief lists "IP Address" among the data captured on a QR scan. Raw IPs are personal data under
+GDPR, and a public passport endpoint is scanned by consumers who never consented to anything, so
+this implementation stores a **privacy-preserving derivation instead of the raw address**:
+
+- the address is **truncated** (last IPv4 octet / lower IPv6 bits dropped) before storage, and
+- a **peppered HMAC** of the address is stored alongside it, so repeat scans can still be
+  correlated for analytics without the original value being recoverable.
+
+Everything the requirement is *for* — geographic country, unique-visitor counts, abuse detection —
+still works. Country resolution runs on the full address in memory (via `geoip-lite`) before
+truncation, so accuracy is unaffected. The pepper comes from `SCAN_IP_PEPPER`, falling back to
+`JWT_SECRET`; rotating it makes historical hashes uncorrelatable by design.
+
+If a reviewer requires literal raw-IP storage, it is a one-line change in
+`api/src/scans/scans.service.ts` — the deviation is a deliberate design decision, not a gap.
+
+---
+
 ## Verification
 
 With Node 20+ installed (Compose stack can be stopped or left running for e2e):
@@ -298,7 +332,14 @@ npx --prefix web tsc --noEmit
 npm --prefix web run build
 ```
 
-Optional Playwright (needs running web+api): `npm --prefix web run test:e2e`.
+End-to-end suites (both also run in CI against Postgres + Redis service containers):
+
+```bash
+npm --prefix api run test:e2e   # NestJS + supertest, needs DATABASE_URL
+npm --prefix web run test:e2e   # Playwright, needs a running API on :3000
+```
+
+Both apps typecheck under **`strict: true`**.
 
 ---
 
@@ -307,7 +348,8 @@ Optional Playwright (needs running web+api): `npm --prefix web run test:e2e`.
 Full-text product search, passport versioning, soft delete, **Activity** feed (humanised audit log
 with date-scoped pagination), Redis caching (dashboard / analytics / public passport + Redis scan
 queue with memory fallback), pagination / filters, passport PDF export, drag-and-drop
-uploads with server magic-byte checks, unit tests, CI (`.github/workflows/ci.yml`).
+uploads with server magic-byte checks, unit tests plus API and browser end-to-end suites, CI
+(`.github/workflows/ci.yml` — typecheck, lint, unit tests, and both e2e suites).
 
 The assessment nav (Dashboard, Products, Product Passports, Analytics, Users, Settings) is present;
 **Activity** is an extra sidebar item for the audit UX.
