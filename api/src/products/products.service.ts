@@ -220,7 +220,14 @@ export class ProductsService {
         where: { id },
         data: {
           ...fields,
-          productionDate: dto.productionDate ? new Date(dto.productionDate) : undefined,
+          // Distinguish "not supplied" (omit) from "explicitly cleared" (null).
+          // Collapsing both to undefined made clearing a production date a no-op.
+          productionDate:
+            dto.productionDate === undefined
+              ? undefined
+              : dto.productionDate === null
+                ? null
+                : new Date(dto.productionDate),
         },
       });
 
@@ -282,7 +289,7 @@ export class ProductsService {
    */
   private async assertTaxonomyOwnership(
     organisationId: string,
-    refs: { categoryId?: string; countryIds: string[] },
+    refs: { categoryId?: string | null; countryIds: string[] },
   ) {
     if (refs.categoryId) {
       const category = await this.prisma.category.findFirst({ where: { id: refs.categoryId, organisationId } });

@@ -41,10 +41,12 @@ export interface SustainabilityResponse {
 }
 
 export interface SustainabilityInput {
-  carbonFootprintKg?: number;
-  waterConsumptionL?: number;
-  recycledPercent?: number;
-  repairabilityScore?: number;
+  // `null` clears a stored value; `undefined` is dropped by JSON.stringify and
+  // therefore leaves the stored value untouched.
+  carbonFootprintKg?: number | null;
+  waterConsumptionL?: number | null;
+  recycledPercent?: number | null;
+  repairabilityScore?: number | null;
   recyclable?: boolean;
 }
 
@@ -53,11 +55,11 @@ export function toSustainabilityInput(
   patch: Partial<SustainabilityInput>,
 ): SustainabilityInput {
   return {
-    carbonFootprintKg: current?.carbonFootprintKg ?? undefined,
-    waterConsumptionL: current?.waterConsumptionL ?? undefined,
-    recycledPercent: current?.recycledPercent ?? undefined,
-    repairabilityScore: current?.repairabilityScore ?? undefined,
-    recyclable: current?.recyclable ?? undefined,
+    carbonFootprintKg: current?.carbonFootprintKg ?? null,
+    waterConsumptionL: current?.waterConsumptionL ?? null,
+    recycledPercent: current?.recycledPercent ?? null,
+    repairabilityScore: current?.repairabilityScore ?? null,
+    recyclable: current?.recyclable ?? false,
     ...patch,
   };
 }

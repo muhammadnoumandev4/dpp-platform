@@ -38,10 +38,12 @@ export function SustainabilityTab({ product, onSaved }: { product: FullProduct; 
     setSaving(true);
     try {
       const patch = {
-        carbonFootprintKg: fields.carbonFootprintKg === '' ? undefined : Number(fields.carbonFootprintKg),
-        waterConsumptionL: fields.waterConsumptionL === '' ? undefined : Number(fields.waterConsumptionL),
-        recycledPercent: fields.recycledPercent === '' ? undefined : Number(fields.recycledPercent),
-        repairabilityScore: fields.repairabilityScore === '' ? undefined : Number(fields.repairabilityScore),
+        // `null`, not `undefined` — an emptied field must clear the stored
+        // value rather than be dropped from the JSON payload.
+        carbonFootprintKg: fields.carbonFootprintKg === '' ? null : Number(fields.carbonFootprintKg),
+        waterConsumptionL: fields.waterConsumptionL === '' ? null : Number(fields.waterConsumptionL),
+        recycledPercent: fields.recycledPercent === '' ? null : Number(fields.recycledPercent),
+        repairabilityScore: fields.repairabilityScore === '' ? null : Number(fields.repairabilityScore),
         recyclable: fields.recyclable,
       };
       await api.patch(`/products/${product.id}`, { sustainability: toSustainabilityInput(s, patch) });

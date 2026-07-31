@@ -42,27 +42,29 @@ export class SustainabilityDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
-  carbonFootprintKg?: number;
+  carbonFootprintKg?: number | null;
 
   @IsOptional()
   @IsNumber()
   @Min(0)
-  waterConsumptionL?: number;
+  waterConsumptionL?: number | null;
 
   @IsOptional()
   @IsNumber()
   @Min(0)
   @Max(100)
-  recycledPercent?: number;
+  recycledPercent?: number | null;
 
   @IsOptional()
   @IsInt()
   @Min(1)
   @Max(10)
-  repairabilityScore?: number;
+  repairabilityScore?: number | null;
 
   @IsOptional()
   @IsBoolean()
+  // Not nullable: `sustainability.recyclable` is a non-null boolean with a
+  // default, so it is toggled rather than cleared.
   recyclable?: boolean;
 }
 
@@ -99,28 +101,28 @@ export class UpdateProductDto {
   @IsString()
   @MaxLength(200)
   @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
-  serialNumber?: string;
+  serialNumber?: string | null;
 
   @IsOptional()
   @IsString()
   @MinLength(1)
   @MaxLength(100)
-  categoryId?: string;
+  categoryId?: string | null;
 
   @IsOptional()
   @IsString()
   @MaxLength(5000)
-  description?: string;
+  description?: string | null;
 
   @IsOptional()
   @IsDateString()
-  productionDate?: string;
+  productionDate?: string | null;
 
   @IsOptional()
   @IsString()
   @MinLength(1)
   @MaxLength(100)
-  countryOfOriginId?: string;
+  countryOfOriginId?: string | null;
 
   @IsOptional()
   @IsArray()
