@@ -12,9 +12,10 @@
     "baseUrl": "./",
     "incremental": true,
     "skipLibCheck": true,
-    "strictNullChecks": true,
-    "noImplicitAny": false,
-    "strictBindCallApply": false,
+    "strict": true,
+    // DTO properties are populated by class-transformer from the request body,
+    // not by a constructor, so definite-assignment checks do not apply to them.
+    "strictPropertyInitialization": false,
     "forceConsistentCasingInFileNames": true,
     "esModuleInterop": true
   }
