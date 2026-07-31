@@ -25,10 +25,22 @@ import { RequirePermission } from '@/components/RequirePermission';
 import { useAuth } from '@/lib/auth-context';
 import { useConfirm } from '@/components/providers/ConfirmProvider';
 import { useToast } from '@/components/providers/ToastProvider';
+import { UnsavedChangesProvider, useDiscardGuard } from '@/hooks/useUnsavedChanges';
+import { downloadQrCode } from '@/lib/download-qr';
 
 const TABS = ['General', 'Materials', 'Sustainability', 'Certifications', 'Documents', 'Images', 'Preview', 'Inventory'] as const;
 
-export default function ProductEditorPage() {
+export default function ProductEditorPageRoute() {
+  // The provider must sit above the editor so the editor itself can read the
+  // dirty state of whichever tab is mounted and guard tab switches.
+  return (
+    <UnsavedChangesProvider>
+      <ProductEditorPage />
+    </UnsavedChangesProvider>
+  );
+}
+
+function ProductEditorPage() {
   const params = useParams();
   const { user } = useAuth();
   const router = useRouter();
@@ -44,6 +56,18 @@ export default function ProductEditorPage() {
   const [successDialogOpen, setSuccessDialogOpen] = useState(false);
   const confirm = useConfirm();
   const toast = useToast();
+  const guardDiscard = useDiscardGuard();
+
+  /**
+   * Tab panels are unmounted on switch, so moving tabs with a dirty form used to
+   * throw the edits away silently. Prompt first and only move if confirmed.
+   */
+  const goToTab = (next: number) => {
+    if (!guardDiscard('You have unsaved changes on this tab. Switching tabs will discard them.')) {
+      return;
+    }
+    setTab(next);
+  };
 
   if (loadError) {
     return (
@@ -133,17 +157,7 @@ export default function ProductEditorPage() {
   async function downloadQr() {
     if (!publishStatus?.qrUrl) return;
     try {
-      const response = await fetch(publishStatus.qrUrl);
-      if (!response.ok) throw new Error('QR download failed');
-      const blobUrl = URL.createObjectURL(await response.blob());
-      const link = document.createElement('a');
-      const safeName = product.name.trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
-      link.href = blobUrl;
-      link.download = `${safeName || 'product'}-passport-qr.png`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(blobUrl);
+      await downloadQrCode(publishStatus.qrUrl, product.name);
     } catch (err) {
       toast.error('Failed to download QR code');
     }
@@ -276,7 +290,7 @@ export default function ProductEditorPage() {
 
       <Tabs 
         value={tab} 
-        onChange={(_, v) => setTab(v)} 
+        onChange={(_, v) => goToTab(v)}
         variant="scrollable"
         scrollButtons="auto"
         allowScrollButtonsMobile
@@ -310,13 +324,13 @@ export default function ProductEditorPage() {
         }}
       >
         {tab > 0 && (
-          <Button variant="outlined" onClick={() => setTab((current) => current - 1)}>
+          <Button variant="outlined" onClick={() => goToTab(tab - 1)}>
             ← Back: {TABS[tab - 1]}
           </Button>
         )}
 
         {tab < TABS.length - 1 ? (
-          <Button variant="contained" onClick={() => setTab((current) => current + 1)}>
+          <Button variant="contained" onClick={() => goToTab(tab + 1)}>
             Next: {TABS[tab + 1]} →
           </Button>
         ) : (
