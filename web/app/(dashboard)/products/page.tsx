@@ -46,6 +46,7 @@ import type { CategoryResponse } from '@/lib/types';
 import { useAuth } from '@/lib/auth-context';
 import { useConfirm } from '@/components/providers/ConfirmProvider';
 import { useToast } from '@/components/providers/ToastProvider';
+import { downloadQrCode } from '@/lib/download-qr';
 
 interface ProductRow {
   id: string;
@@ -63,8 +64,8 @@ function QuickActions({ row }: { row: ProductRow }) {
   const router = useRouter();
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-      <Tooltip title="Preview">
-        <IconButton size="small" onClick={() => router.push(`/products/${row.id}?tab=preview`)} aria-label={`Preview ${row.name}`}>
+      <Tooltip title="View">
+        <IconButton size="small" onClick={() => router.push(`/products/${row.id}?tab=preview`)} aria-label={`View ${row.name}`}>
           <VisibilityOutlinedIcon fontSize="small" />
         </IconButton>
       </Tooltip>
@@ -118,6 +119,16 @@ function RowActions({ row, onDeleted, canArchive }: { row: ProductRow; onDeleted
     }
   }
 
+  async function handleDownloadQr() {
+    setAnchor(null);
+    if (!row.passport?.qrUrl) return;
+    try {
+      await downloadQrCode(row.passport.qrUrl, row.name);
+    } catch {
+      toast.error('Failed to download QR code.');
+    }
+  }
+
   return (
     <>
       <IconButton size="small" onClick={(e) => setAnchor(e.currentTarget)} aria-label="Row actions">
@@ -134,9 +145,7 @@ function RowActions({ row, onDeleted, canArchive }: { row: ProductRow; onDeleted
           </MenuItem>
         )}
         {row.passport?.qrUrl && (
-          <MenuItem component="a" href={row.passport.qrUrl} download onClick={() => setAnchor(null)}>
-            Download QR
-          </MenuItem>
+          <MenuItem onClick={handleDownloadQr}>Download QR</MenuItem>
         )}
         {canArchive && <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>Delete</MenuItem>}
       </Menu>

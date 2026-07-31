@@ -20,6 +20,7 @@ import DownloadIcon from '@mui/icons-material/Download';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { useToast } from '@/components/providers/ToastProvider';
+import { downloadQrCode } from '@/lib/download-qr';
 
 interface QrCodeDialogProps {
   qrUrl: string;
@@ -54,17 +55,7 @@ export function QrCodeDialog({
     setDownloading(true);
     setDownloadError(false);
     try {
-      const response = await fetch(qrUrl);
-      if (!response.ok) throw new Error('QR download failed');
-      const blobUrl = URL.createObjectURL(await response.blob());
-      const link = document.createElement('a');
-      const safeName = productName.trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
-      link.href = blobUrl;
-      link.download = `${safeName || 'product'}-passport-qr.png`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(blobUrl);
+      await downloadQrCode(qrUrl, productName);
     } catch {
       setDownloadError(true);
     } finally {
