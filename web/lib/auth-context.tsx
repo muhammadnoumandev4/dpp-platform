@@ -19,7 +19,7 @@ export interface CurrentUser {
 interface AuthContextValue {
   user: CurrentUser | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, next?: string | null) => Promise<void>;
   registerBrand: (data: RegisterBrandInput) => Promise<void>;
   logout: () => void;
 }
@@ -82,11 +82,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [pathname]);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string, next?: string | null) => {
     const result = await api.post<{ user: CurrentUser }>('/auth/login', { email, password });
     setUser(result.user);
     setUiSessionCookie();
-    if (result.user.role === 'ADMIN') {
+    // Honour the `?next=` set by the middleware when it bounced an
+    // unauthenticated request, so users land back where they were going.
+    // Only same-origin relative paths are accepted (never `//host` or a URL).
+    const isSafeNext = Boolean(next) && next!.startsWith('/') && !next!.startsWith('//');
+    if (isSafeNext && !isPublicPath(next!)) {
+      router.push(next!);
+    } else if (result.user.role === 'ADMIN') {
       router.push('/admin');
     } else {
       router.push('/');

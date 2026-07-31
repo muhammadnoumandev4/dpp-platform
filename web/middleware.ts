@@ -19,7 +19,8 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/passports') ||
     pathname.startsWith('/analytics') ||
     pathname.startsWith('/users') ||
-    pathname.startsWith('/settings');
+    pathname.startsWith('/settings') ||
+    pathname.startsWith('/activity');
 
   if (!hasSession && isProtected) {
     const login = new URL('/login', request.url);

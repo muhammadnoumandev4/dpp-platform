@@ -51,7 +51,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     // having to special-case it.
     if (window.location.pathname !== '/login') {
       // Single login route for brand and platform staff — there is no /admin/login.
-      window.location.href = '/login';
+      // Carry the current location so signing back in returns the user there,
+      // matching what the middleware does for a missing session cookie.
+      const next = `${window.location.pathname}${window.location.search}`;
+      window.location.href = `/login?next=${encodeURIComponent(next)}`;
     }
   }
 
