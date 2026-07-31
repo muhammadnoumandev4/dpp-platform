@@ -19,6 +19,7 @@ api/uploads/
 api/coverage/
 web/test-results/
 web/playwright-report/
+api/test-results/
 
 # editor/OS
 .DS_Store
@@ -28,4 +29,7 @@ tmp/
 .claude/
 *.pdf
 CODEX_REVIEW_BRIEF.md
-scripts/
+
+# scripts/ is part of the submission (integration + DB integrity smoke tests),
+# but generated PDF output under it is not.
+scripts/**/out/

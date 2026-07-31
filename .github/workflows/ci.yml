@@ -7,7 +7,7 @@ on:
 
 jobs:
   api:
-    name: API — lint & unit tests
+    name: API — typecheck & unit tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -21,6 +21,7 @@ jobs:
           cache-dependency-path: api/package-lock.json
       - run: npm ci
       - run: npx prisma generate
+      - run: npx tsc --noEmit
       - run: npm test -- --coverage=false
 
   web:
@@ -39,3 +40,99 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npm run lint
+
+  e2e:
+    name: End-to-end — API integration & browser journey
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: dpp
+          POSTGRES_PASSWORD: dpp
+          POSTGRES_DB: dpp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dpp"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://dpp:dpp@localhost:5432/dpp
+      # CI-only value. Real secrets never live in the repo; see .env.example.
+      JWT_SECRET: ci-only-secret-value-at-least-32-characters-long
+      PORT: '3000'
+      UPLOAD_DIR: ./uploads
+      PUBLIC_BASE_URL: http://localhost:3000
+      WEB_PUBLIC_URL: http://localhost:3001
+      CORS_ORIGIN: http://localhost:3001
+      COOKIE_SECURE: 'false'
+      SCAN_COUNTRY_FALLBACK: XX
+      REDIS_URL: redis://localhost:6379
+      REDIS_KEY_PREFIX: 'dpp:'
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      INTERNAL_API_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install API dependencies
+        working-directory: api
+        run: npm ci
+
+      - name: Apply migrations and seed demo data
+        working-directory: api
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
+          npm run db:seed
+
+      - name: API integration tests
+        working-directory: api
+        run: npm run test:e2e
+
+      - name: Build and start API
+        working-directory: api
+        run: |
+          npm run build
+          node dist/main &
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3000/health > /dev/null; then
+              echo "API is up"; exit 0
+            fi
+            sleep 2
+          done
+          echo "API failed to start within 120s"; exit 1
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Install Playwright browser
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      # playwright.config.ts starts the Next dev server on :3001 itself.
+      - name: Browser journey tests
+        working-directory: web
+        run: npm run test:e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          retention-days: 7
